@@ -1,0 +1,31 @@
+[versions]
+# Shadow plugin
+shadow = "9.0.0-beta17"
+
+# BungeeCord API
+bungeecord = "1.21-R0.4"
+
+# Spigot API
+spigot = "1.8.8-R0.1-SNAPSHOT"
+
+# CloudNet
+cloudnet = "4.0.0-RC14"
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+
+[libraries]
+# BungeeCord API
+bungeecord = { group = "net.md-5", name = "bungeecord-api", version.ref = "bungeecord" }
+
+# Spigot API
+spigot = { group = "org.spigotmc", name = "spigot-api", version.ref = "spigot" }
+
+# CloudNet
+cloudnet-platform-inject-api = { group = "eu.cloudnetservice.cloudnet", name = "platform-inject-api", version.ref = "cloudnet" }
+cloudnet-driver = { group = "eu.cloudnetservice.cloudnet", name = "driver-api", version.ref = "cloudnet" }
+cloudnet-bridge = { group = "eu.cloudnetservice.cloudnet", name = "bridge-api", version.ref = "cloudnet" }
+cloudnet-platform-inject-processor = { group = "eu.cloudnetservice.cloudnet", name = "platform-inject-processor", version.ref = "cloudnet" }
+
+[bundles]
+cloudnet = ["cloudnet-platform-inject-api", "cloudnet-driver", "cloudnet-bridge"]

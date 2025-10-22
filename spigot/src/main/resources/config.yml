@@ -1,0 +1,24 @@
+# Table to be created in the database.
+database-table: playtime
+
+# Prefix for the Redis keys.
+redis-prefix: playtime
+
+# Threshold in seconds after which a player is considered AFK
+# when no activity is detected.
+afk-threshold: 300
+
+# Delay in ticks before playtime is cached to Redis.
+cache-delay: -1
+
+# Messages
+messages:
+  player-not-found: '§cPlayer was not found.'
+  own-current-playtime: '§7Your current playtime is §e<playtime> §7and you have been online for a total of §e<onlinetime>§7.'
+  no-permission: '§cI''m sorry, but you do not have permission to perform this command. Please contact the server administrators if you believe that this is in error.'
+  moderation-command-usage: '§7Usage: §c/playtime <get/update/reset> <player> [online/play] [time (e.g. 1d2h30m)]'
+  player-get-playtime: "§7Connection info of §e<player>§7:\n§8 - §7Onlinetime: §e<onlinetime>\n§8 - §7Playtime: §e<playtime>\n§8 - §7First seen: §e<first_seen>\n§8 - §7Last seen: §e<last_seen>"
+  player-update-playtime: '§e<player>§7''s playtime has been updated to §e<new_time>§7.'
+  player-update-onlinetime: '§e<player>§7''s onlinetime has been updated to §e<new_time>§7.'
+  player-update-error: '§cAn error occurred while converting new online-/playtime of §e<player>§c: §e<error>'
+  player-reset-playtime: '§e<player>§7''s play- and onlinetime have been reset.'

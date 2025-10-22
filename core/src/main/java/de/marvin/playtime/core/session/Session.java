@@ -1,0 +1,195 @@
+package de.marvin.playtime.core.session;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
+
+/**
+ * Holds information about a player's online- and playtime.
+ */
+public class Session {
+
+    /**
+     * {@link UUID} of the player.
+     */
+    @NotNull private final UUID uniqueId;
+
+    /**
+     * Online time of the player in milliseconds.
+     */
+    private long onlinetimeInMillis;
+    /**
+     * Play time of the player in milliseconds.
+     */
+    private long playtimeInMillis;
+
+    /**
+     * Determines, if playtime should be counted.
+     */
+    private boolean countPlaytime;
+    /**
+     * Determines, if player currently is away from
+     * keyboard and no playtime should be counted.
+     */
+    private boolean awayFromKeyboard;
+    /**
+     * Timestamp in milliseconds at which the
+     * player's last activity took place.
+     */
+    private long lastActivity;
+
+    /**
+     * Creates a new {@link Session} instance.
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @param onlinetimeInMillis onlinetime in milliseconds
+     * @param playtimeInMillis playtime in milliseconds
+     */
+    public Session(
+            @NotNull UUID uniqueId,
+            long onlinetimeInMillis,
+            long playtimeInMillis
+    ) {
+        this.uniqueId = uniqueId;
+
+        this.onlinetimeInMillis = onlinetimeInMillis;
+        this.playtimeInMillis = playtimeInMillis;
+
+        this.countPlaytime = false;
+        this.awayFromKeyboard = false;
+        this.lastActivity = System.currentTimeMillis();
+    }
+
+    /**
+     * Returns the {@link UUID} of the player.
+     *
+     * @return {@link UUID} of the player.
+     */
+    public @NotNull UUID uniqueId() {
+        return this.uniqueId;
+    }
+
+    /**
+     * Returns the onlinetime in milliseconds.
+     *
+     * @return Onlinetime in milliseconds.
+     */
+    public long onlinetimeInMillis() {
+        return this.onlinetimeInMillis;
+    }
+
+    /**
+     * Returns the playtime in milliseconds.
+     *
+     * @return Playtime in milliseconds.
+     */
+    public long playtimeInMillis() {
+        return this.playtimeInMillis;
+    }
+
+    /**
+     * Returns whether playtime should be counted or not.
+     *
+     * @return {@code true} if playtime should be counted,
+     *         {@code false} otherwise.
+     */
+    public boolean countPlaytime() {
+        return this.countPlaytime;
+    }
+
+    /**
+     * Returns whether player currently is away from keyboard or not.
+     *
+     * @return {@code true} if player currently is afk,
+     *         {@code false} otherwise.
+     */
+    public boolean awayFromKeyboard() {
+        return this.awayFromKeyboard;
+    }
+
+    /**
+     * Returns timestamp in milliseconds at which the player's last
+     * activity took place.
+     *
+     * @return Timestamp in milliseconds at which the player's last
+     * activity took place.
+     */
+    public long lastActivity() {
+        return this.lastActivity;
+    }
+
+    /**
+     * Sets whether playtime should be counted or not.
+     *
+     * @param countPlaytime playtime counting status
+     */
+    public void setCountPlaytime(
+            boolean countPlaytime
+    ) {
+        this.countPlaytime = countPlaytime;
+    }
+
+    /**
+     * Sets whether the player is away from keyboard or not.
+     *
+     * @param awayFromKeyboard afk status
+     */
+    public void setAwayFromKeyboard(
+            boolean awayFromKeyboard
+    ) {
+        this.awayFromKeyboard = awayFromKeyboard;
+    }
+
+    /**
+     * Updates last activity timestamp.
+     */
+    public void updateLastActivity() {
+        this.lastActivity = System.currentTimeMillis();
+        if (this.awayFromKeyboard) this.awayFromKeyboard = false;
+    }
+
+    /**
+     * Updates the sessions {@link Session#onlinetimeInMillis} and
+     * {@link Session#playtimeInMillis} with given values if not null.
+     *
+     * @param onlinetimeInMillis new onlinetime in milliseconds
+     * @param playtimeInMillis   new playtime in milliseconds
+     */
+    public void updateTimes(
+            @Nullable Long onlinetimeInMillis,
+            @Nullable Long playtimeInMillis
+    ) {
+        if (onlinetimeInMillis != null) this.onlinetimeInMillis = onlinetimeInMillis;
+        if (playtimeInMillis != null) this.playtimeInMillis = playtimeInMillis;
+    }
+
+    /**
+     * Updates the sessions {@link Session#onlinetimeInMillis} and
+     * {@link Session#playtimeInMillis} based on the {@link Session}'s
+     * state.
+     */
+    public void update() {
+        this.onlinetimeInMillis += 1000L;
+        if (!this.countPlaytime) return;
+        if (this.awayFromKeyboard) return;
+        if (this.lastActivity + SessionHandler.afkThreshold() <= System.currentTimeMillis()) {
+            this.setAwayFromKeyboard(true);
+            return;
+        }
+        this.playtimeInMillis += 1000L;
+    }
+
+    /**
+     * Creates a default {@link Session} with 0 onlinetime and 0 playtime.
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @return Default {@link Session}.
+     */
+    public static Session defaultSession(
+            @NotNull UUID uniqueId
+    ) {
+        return new Session(uniqueId, 0, 0);
+    }
+
+}

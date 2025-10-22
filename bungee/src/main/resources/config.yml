@@ -1,0 +1,5 @@
+# Table to be created in the database.
+database-table: playtime
+
+# Prefix for the Redis keys.
+redis-prefix: playtime
