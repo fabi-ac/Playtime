@@ -52,7 +52,7 @@ public class Config extends ConfigHandler {
      * @return Threshold in milliseconds.
      */
     public long afkThreshold() {
-        return this.getLong("afk-threshold", 300000);
+        return this.getLong("afk-threshold", 300) * 1000L;
     }
 
     /**
