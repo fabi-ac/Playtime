@@ -47,7 +47,8 @@ public class PlayerActivityListener implements Listener {
                             var uniqueId = player.getUniqueId();
                             var lastLocation = this.lastPlayerLocations.get(uniqueId);
                             var currentLocation = player.getLocation();
-                            if (lastLocation != null && lastLocation.equals(currentLocation)) return;
+                            this.lastPlayerLocations.put(uniqueId, currentLocation);
+                            if (lastLocation == null || currentLocation.equals(lastLocation)) return;
                             this.playtimeAPI.updateLastActivity(uniqueId);
                         }), 0L, 40L
                 ).getTaskId();
