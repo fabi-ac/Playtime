@@ -81,6 +81,8 @@ public class SessionHandler implements PlaytimeAPI {
     public CloudFuture<Session> forceSession(
             @NotNull UUID uniqueId
     ) {
+        if (this.cachedSessions.containsKey(uniqueId))
+            return new CloudFuture<>(this.session(uniqueId));
         return this.databaseHandler.forceSession(uniqueId);
     }
 

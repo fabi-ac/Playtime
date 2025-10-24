@@ -3,7 +3,6 @@ package de.marvin.playtime.server.command;
 import de.marvin.api.core.api.UserAPI;
 import de.marvin.api.dependencies.lang3.tuple.Pair;
 import de.marvin.playtime.core.PlaytimeAPI;
-import de.marvin.playtime.core.database.DatabaseHandler;
 import de.marvin.playtime.core.util.TimeConverter;
 import de.marvin.playtime.server.config.Config;
 import eu.cloudnetservice.modules.bridge.player.CloudOfflinePlayer;
@@ -11,6 +10,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,16 +21,20 @@ import java.util.UUID;
 public class PlaytimeCommand implements CommandExecutor {
 
     private final PlaytimeAPI playtimeAPI;
+
+    private final JavaPlugin plugin;
     private final Config config;
 
     private final UserAPI userAPI;
 
     public PlaytimeCommand(
             PlaytimeAPI playtimeAPI,
+            JavaPlugin plugin,
             Config config,
             UserAPI userAPI
     ) {
         this.playtimeAPI = playtimeAPI;
+        this.plugin = plugin;
         this.config = config;
         this.userAPI = userAPI;
     }
@@ -210,34 +214,38 @@ public class PlaytimeCommand implements CommandExecutor {
             return;
         }
 
-        var session = this.playtimeAPI.session(cloudOfflinePlayer.uniqueId());
-        var playtime = TimeConverter.convertMillisToDaysHoursMinutes(
-                session.playtimeInMillis(),
-                true,
-                true
-        );
-        var onlinetime = TimeConverter.convertMillisToDaysHoursMinutes(
-                session.onlinetimeInMillis(),
-                true,
-                true
-        );
+        this.playtimeAPI.forceSession(cloudOfflinePlayer.uniqueId()).onSuccess(session -> {
+            var playtime = TimeConverter.convertMillisToDaysHoursMinutes(
+                    session.playtimeInMillis(),
+                    true,
+                    true
+            );
+            var onlinetime = TimeConverter.convertMillisToDaysHoursMinutes(
+                    session.onlinetimeInMillis(),
+                    true,
+                    true
+            );
 
-        var firstSeen = this.convertTimeToString(
-                cloudOfflinePlayer.firstLoginTimeMillis()
-        );
-        var lastSeen = this.convertTimeToString(
-                cloudOfflinePlayer.lastLoginTimeMillis()
-        );
+            var firstSeen = this.convertTimeToString(
+                    cloudOfflinePlayer.firstLoginTimeMillis()
+            );
+            var lastSeen = this.convertTimeToString(
+                    cloudOfflinePlayer.lastLoginTimeMillis()
+            );
 
-        var message = this.config.message(
-                "player-get-playtime",
-                Pair.of("player", cloudOfflinePlayer.name()),
-                Pair.of("playtime", playtime),
-                Pair.of("onlinetime", onlinetime),
-                Pair.of("first_seen", firstSeen),
-                Pair.of("last_seen", lastSeen)
-        );
-        commandSender.sendMessage(message);
+            var message = this.config.message(
+                    "player-get-playtime",
+                    Pair.of("player", cloudOfflinePlayer.name()),
+                    Pair.of("playtime", playtime),
+                    Pair.of("onlinetime", onlinetime),
+                    Pair.of("first_seen", firstSeen),
+                    Pair.of("last_seen", lastSeen)
+            );
+            this.plugin.getServer().getScheduler().runTask(
+                    this.plugin,
+                    () -> commandSender.sendMessage(message)
+            );
+        });
     }
 
     /**

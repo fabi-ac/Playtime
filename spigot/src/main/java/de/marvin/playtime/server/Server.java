@@ -128,6 +128,7 @@ public class Server implements PlatformEntrypoint {
                 "playtime",
                 new PlaytimeCommand(
                         api,
+                        this.plugin,
                         this.config,
                         this.userAPI
                 ),
