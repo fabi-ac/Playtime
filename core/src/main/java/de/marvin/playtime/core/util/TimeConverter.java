@@ -134,7 +134,7 @@ public class TimeConverter {
                 total = switch (unit) {
                     case "d" -> total.plus(Duration.ofDays(value));
                     case "h" -> total.plus(Duration.ofHours(value));
-                    case "min" -> total.plus(Duration.ofMinutes(value));
+                    case "m" -> total.plus(Duration.ofMinutes(value));
                     case "s" -> total.plus(Duration.ofSeconds(value));
                     case "ms" -> total.plus(Duration.ofMillis(value));
                     default -> throw new IllegalArgumentException("Unknown unit: " + unit);
