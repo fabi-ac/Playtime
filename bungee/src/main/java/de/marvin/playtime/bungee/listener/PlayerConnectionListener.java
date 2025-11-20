@@ -1,8 +1,8 @@
 package de.marvin.playtime.bungee.listener;
 
 import de.marvin.playtime.core.database.DatabaseHandler;
-import net.md_5.bungee.api.event.LoginEvent;
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
+import net.md_5.bungee.api.event.PostLoginEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
 
@@ -28,10 +28,9 @@ public class PlayerConnectionListener implements Listener {
      */
     @EventHandler
     public void handle(
-            LoginEvent event
+            PostLoginEvent event
     ) {
-        if (event.isCancelled()) return;
-        this.databaseHandler.cache(event.getConnection().getUniqueId());
+        this.databaseHandler.cache(event.getPlayer().getUniqueId());
     }
 
     /**

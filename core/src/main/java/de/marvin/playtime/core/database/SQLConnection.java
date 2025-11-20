@@ -72,12 +72,63 @@ public class SQLConnection {
     }
 
     /**
+     * Safely updates playtime and onlinetime of the player with the given {@link UUID}.
+     * If the player does not exist in the database, a new entry is created.
+     * <p>
+     * This method ensures that onlinetime and playtime are only increased
+     * and never decreased. If an attempt is made to decrease either value,
+     * the operation is aborted and a warning is logged.
+     *
+     * @param uniqueId   {@link UUID} of the player
+     * @param onlinetime onlinetime to update in milliseconds
+     * @param playtime   playtime to update in milliseconds
+     */
+    public void safeUpdate(
+            @NotNull UUID uniqueId,
+            @Nullable Long onlinetime,
+            @Nullable Long playtime
+    ) {
+        this.database.queryResult(
+                "SELECT onlinetime, playtime FROM " + this.table + " WHERE unique_id = ? LIMIT 1",
+                preparedStatement -> preparedStatement.setString(1, uniqueId.toString())
+        ).onSuccess(resultSet -> {
+            try {
+                if (!resultSet.next()) {
+                    this.update(uniqueId, onlinetime, playtime);
+                    return;
+                }
+                long currentOnlinetime = resultSet.getLong("onlinetime");
+                long currentPlaytime = resultSet.getLong("playtime");
+                if (onlinetime == null || currentOnlinetime > onlinetime) {
+                    this.logger.warning(
+                            "Attempted to decrease onlinetime for player " + uniqueId +
+                                    " from " + currentOnlinetime + " to " + onlinetime + ". Operation aborted."
+                    );
+                    return;
+                }
+                if (playtime == null || currentPlaytime > playtime) {
+                    this.logger.warning(
+                            "Attempted to decrease playtime for player " + uniqueId +
+                                    " from " + currentPlaytime + " to " + playtime + ". Operation aborted."
+                    );
+                    return;
+                }
+                this.update(uniqueId, onlinetime, playtime);
+            } catch (Exception exception) {
+                this.logger.warning(
+                        "Failed to update session data for player " + uniqueId + ": " + exception.getMessage()
+                );
+            }
+        });
+    }
+
+    /**
      * Updates playtime and onlinetime of the player with the given {@link UUID}.
      * If the player does not exist in the database, a new entry is created.
      *
-     * @param uniqueId {@link UUID} of the player
+     * @param uniqueId   {@link UUID} of the player
      * @param onlinetime onlinetime to update in milliseconds
-     * @param playtime playtime to update in milliseconds
+     * @param playtime   playtime to update in milliseconds
      */
     public void update(
             @NotNull UUID uniqueId,

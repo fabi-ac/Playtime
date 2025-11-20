@@ -145,7 +145,8 @@ public class SessionHandler implements PlaytimeAPI {
         this.databaseHandler.update(
                 uniqueId,
                 session.onlinetimeInMillis(),
-                session.playtimeInMillis()
+                session.playtimeInMillis(),
+                false
         );
     }
 
@@ -175,7 +176,8 @@ public class SessionHandler implements PlaytimeAPI {
         this.databaseHandler.update(
                 uniqueId,
                 onlinetimeInMillis,
-                playtimeInMillis
+                playtimeInMillis,
+                true
         );
     }
 
@@ -230,7 +232,8 @@ public class SessionHandler implements PlaytimeAPI {
         this.cachedSessions.values().forEach(session -> this.databaseHandler.update(
                 session.uniqueId(),
                 session.onlinetimeInMillis(),
-                session.playtimeInMillis()
+                session.playtimeInMillis(),
+                false
         ));
         this.cachedSessions.clear();
     }

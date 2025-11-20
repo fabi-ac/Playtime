@@ -80,7 +80,7 @@ public class DatabaseHandler {
     ) {
         var session = this.redisConnection.getAndUncache(uniqueId);
         if (session == null) return;
-        this.sqlConnection.update(
+        this.sqlConnection.safeUpdate(
                 uniqueId,
                 session.onlinetimeInMillis(),
                 session.playtimeInMillis()
@@ -95,11 +95,14 @@ public class DatabaseHandler {
      * @param uniqueId           {@link UUID} of the player
      * @param onlinetimeInMillis onlinetime in milliseconds
      * @param playtimeInMillis   playtime in milliseconds
+     * @param force              whether to overwrite database update
+     *                           restrictions
      */
     public void update(
             @NotNull UUID uniqueId,
             @Nullable Long onlinetimeInMillis,
-            @Nullable Long playtimeInMillis
+            @Nullable Long playtimeInMillis,
+            boolean force
     ) {
         if (this.redisConnection.exists(uniqueId)) {
             var currentSession = this.redisConnection.session(uniqueId);
@@ -118,7 +121,15 @@ public class DatabaseHandler {
             );
             return;
         }
-        this.sqlConnection.update(
+        if (force) {
+            this.sqlConnection.update(
+                    uniqueId,
+                    onlinetimeInMillis,
+                    playtimeInMillis
+            );
+            return;
+        }
+        this.sqlConnection.safeUpdate(
                 uniqueId,
                 onlinetimeInMillis,
                 playtimeInMillis
@@ -140,7 +151,8 @@ public class DatabaseHandler {
             this.update(
                     uniqueId,
                     defaultSession.onlinetimeInMillis(),
-                    defaultSession.playtimeInMillis()
+                    defaultSession.playtimeInMillis(),
+                    true
             );
             return;
         }
