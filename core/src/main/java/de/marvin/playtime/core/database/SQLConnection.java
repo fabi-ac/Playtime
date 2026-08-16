@@ -7,6 +7,7 @@ import de.marvin.playtime.core.session.Session;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.sql.Types;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -127,8 +128,8 @@ public class SQLConnection {
      * If the player does not exist in the database, a new entry is created.
      *
      * @param uniqueId   {@link UUID} of the player
-     * @param onlinetime onlinetime to update in milliseconds
-     * @param playtime   playtime to update in milliseconds
+     * @param onlinetime onlinetime to update in milliseconds, or {@code null} to keep the current value
+     * @param playtime   playtime to update in milliseconds, or {@code null} to keep the current value
      */
     public void update(
             @NotNull UUID uniqueId,
@@ -139,12 +140,14 @@ public class SQLConnection {
                 "INSERT INTO " + this.table + " (unique_id, onlinetime, playtime) " +
                         "VALUES (?, COALESCE(?, 0), COALESCE(?, 0)) " +
                         "ON DUPLICATE KEY UPDATE " +
-                        "onlinetime = COALESCE(VALUES(onlinetime), onlinetime), " +
-                        "playtime = COALESCE(VALUES(playtime), playtime);",
+                        "onlinetime = COALESCE(?, onlinetime), " +
+                        "playtime = COALESCE(?, playtime);",
                 preparedStatement -> {
                     preparedStatement.setString(1, uniqueId.toString());
-                    preparedStatement.setObject(2, onlinetime, java.sql.Types.BIGINT);
-                    preparedStatement.setObject(3, playtime, java.sql.Types.BIGINT);
+                    preparedStatement.setObject(2, onlinetime, Types.BIGINT);
+                    preparedStatement.setObject(3, playtime, Types.BIGINT);
+                    preparedStatement.setObject(4, onlinetime, Types.BIGINT);
+                    preparedStatement.setObject(5, playtime, Types.BIGINT);
                 }
         );
     }
