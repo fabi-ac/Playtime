@@ -1,6 +1,5 @@
 package de.marvin.playtime.server.listener;
 
-import com.google.common.collect.Maps;
 import de.marvin.playtime.core.PlaytimeAPI;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -13,6 +12,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -22,7 +22,7 @@ public class PlayerActivityListener implements Listener {
     private final PlaytimeAPI playtimeAPI;
 
     private int movementCheckTaskId = -1;
-    private final Map<UUID, Location> lastPlayerLocations = Maps.newConcurrentMap();
+    private final Map<UUID, Location> lastPlayerLocations = new HashMap<>();
 
     public PlayerActivityListener(
             JavaPlugin plugin,
@@ -42,7 +42,7 @@ public class PlayerActivityListener implements Listener {
      */
     public void checkMovement() {
         this.movementCheckTaskId =
-                this.plugin.getServer().getScheduler().runTaskTimerAsynchronously(this.plugin, () ->
+                this.plugin.getServer().getScheduler().runTaskTimer(this.plugin, () ->
                         this.plugin.getServer().getOnlinePlayers().forEach(player -> {
                             var uniqueId = player.getUniqueId();
                             var lastLocation = this.lastPlayerLocations.get(uniqueId);

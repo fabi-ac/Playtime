@@ -80,10 +80,11 @@ public class DatabaseHandler {
     ) {
         var session = this.redisConnection.getAndUncache(uniqueId);
         if (session == null) return;
+        var snapshot = session.snapshot();
         this.sqlConnection.safeUpdate(
                 uniqueId,
-                session.onlinetimeInMillis(),
-                session.playtimeInMillis()
+                snapshot.onlinetimeInMillis(),
+                snapshot.playtimeInMillis()
         );
     }
 
@@ -108,15 +109,16 @@ public class DatabaseHandler {
             var currentSession = this.redisConnection.session(uniqueId);
             if (currentSession == null)
                 currentSession = Session.defaultSession(uniqueId);
+            var currentSnapshot = currentSession.snapshot();
             this.redisConnection.cache(
                     new Session(
                             uniqueId,
                             onlinetimeInMillis != null
                                     ? onlinetimeInMillis
-                                    : currentSession.onlinetimeInMillis(),
+                                    : currentSnapshot.onlinetimeInMillis(),
                             playtimeInMillis != null
                                     ? playtimeInMillis
-                                    : currentSession.playtimeInMillis()
+                                    : currentSnapshot.playtimeInMillis()
                     )
             );
             return;

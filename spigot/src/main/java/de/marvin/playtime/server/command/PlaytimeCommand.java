@@ -178,13 +178,14 @@ public class PlaytimeCommand implements CommandExecutor {
             @NotNull Player player
     ) {
         var session = this.playtimeAPI.session(player.getUniqueId());
+        var snapshot = session.snapshot();
         var playtime = TimeConverter.convertMillisToDaysHoursMinutes(
-                session.playtimeInMillis(),
+                snapshot.playtimeInMillis(),
                 true,
                 true
         );
         var onlinetime = TimeConverter.convertMillisToDaysHoursMinutes(
-                session.onlinetimeInMillis(),
+                snapshot.onlinetimeInMillis(),
                 true,
                 true
         );
@@ -215,13 +216,14 @@ public class PlaytimeCommand implements CommandExecutor {
         }
 
         this.playtimeAPI.forceSession(cloudOfflinePlayer.uniqueId()).onSuccess(session -> {
+            var snapshot = session.snapshot();
             var playtime = TimeConverter.convertMillisToDaysHoursMinutes(
-                    session.playtimeInMillis(),
+                    snapshot.playtimeInMillis(),
                     true,
                     true
             );
             var onlinetime = TimeConverter.convertMillisToDaysHoursMinutes(
-                    session.onlinetimeInMillis(),
+                    snapshot.onlinetimeInMillis(),
                     true,
                     true
             );

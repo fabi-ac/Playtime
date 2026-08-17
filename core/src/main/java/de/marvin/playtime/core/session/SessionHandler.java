@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class SessionHandler implements PlaytimeAPI {
 
@@ -49,7 +50,7 @@ public class SessionHandler implements PlaytimeAPI {
             @NotNull UUID uniqueId
     ) {
         var session = this.databaseHandler.session(uniqueId);
-        this.cachedSessions.put(session.uniqueId(), session);
+        this.cachedSessions.putIfAbsent(session.uniqueId(), session);
     }
 
     /**
@@ -64,10 +65,8 @@ public class SessionHandler implements PlaytimeAPI {
     public Session session(
             @NotNull UUID uniqueId
     ) {
-        return this.cachedSessions.getOrDefault(
-                uniqueId,
-                Session.defaultSession(uniqueId)
-        );
+        var session = this.cachedSessions.get(uniqueId);
+        return session != null ? session : Session.defaultSession(uniqueId);
     }
 
     /**
@@ -81,8 +80,8 @@ public class SessionHandler implements PlaytimeAPI {
     public CloudFuture<Session> forceSession(
             @NotNull UUID uniqueId
     ) {
-        if (this.cachedSessions.containsKey(uniqueId))
-            return new CloudFuture<>(this.session(uniqueId));
+        var session = this.cachedSessions.get(uniqueId);
+        if (session != null) return new CloudFuture<>(session);
         return this.databaseHandler.forceSession(uniqueId);
     }
 
@@ -98,8 +97,10 @@ public class SessionHandler implements PlaytimeAPI {
             @NotNull UUID uniqueId,
             boolean countPlaytime
     ) {
-        var session = this.cachedSessions.get(uniqueId);
-        if (session != null) session.setCountPlaytime(countPlaytime);
+        this.cachedSessions.computeIfPresent(uniqueId, (ignored, session) -> {
+            session.setCountPlaytime(countPlaytime);
+            return session;
+        });
     }
 
     /**
@@ -114,8 +115,10 @@ public class SessionHandler implements PlaytimeAPI {
             @NotNull UUID uniqueId,
             boolean away
     ) {
-        var session = this.cachedSessions.get(uniqueId);
-        if (session != null) session.setAwayFromKeyboard(away);
+        this.cachedSessions.computeIfPresent(uniqueId, (ignored, session) -> {
+            session.setAwayFromKeyboard(away);
+            return session;
+        });
     }
 
     /**
@@ -127,8 +130,10 @@ public class SessionHandler implements PlaytimeAPI {
     public void updateLastActivity(
             @NotNull UUID uniqueId
     ) {
-        var session = this.cachedSessions.get(uniqueId);
-        if (session != null) session.updateLastActivity();
+        this.cachedSessions.computeIfPresent(uniqueId, (ignored, session) -> {
+            session.updateLastActivity();
+            return session;
+        });
     }
 
     /**
@@ -140,12 +145,17 @@ public class SessionHandler implements PlaytimeAPI {
     public void saveAndUncacheSession(
             @NotNull UUID uniqueId
     ) {
-        var session = this.cachedSessions.remove(uniqueId);
-        if (session == null) return;
+        var snapshot = new AtomicReference<Session.Snapshot>();
+        this.cachedSessions.computeIfPresent(uniqueId, (ignored, session) -> {
+            snapshot.set(session.snapshot());
+            return null;
+        });
+        var persisted = snapshot.get();
+        if (persisted == null) return;
         this.databaseHandler.update(
                 uniqueId,
-                session.onlinetimeInMillis(),
-                session.playtimeInMillis(),
+                persisted.onlinetimeInMillis(),
+                persisted.playtimeInMillis(),
                 false
         );
     }
@@ -165,14 +175,14 @@ public class SessionHandler implements PlaytimeAPI {
             @Nullable Long onlinetimeInMillis,
             @Nullable Long playtimeInMillis
     ) {
-        var session = this.cachedSessions.get(uniqueId);
-        if (session != null) {
-            session.updateTimes(
+        var updatedCachedSession = this.cachedSessions.computeIfPresent(uniqueId, (ignored, session) -> {
+            session.update(
                     onlinetimeInMillis,
                     playtimeInMillis
             );
-            return;
-        }
+            return session;
+        });
+        if (updatedCachedSession != null) return;
         this.databaseHandler.update(
                 uniqueId,
                 onlinetimeInMillis,
@@ -192,14 +202,11 @@ public class SessionHandler implements PlaytimeAPI {
     public void reset(
             @NotNull UUID uniqueId
     ) {
-        var session = this.cachedSessions.get(uniqueId);
-        if (session != null) {
-            this.cachedSessions.put(
-                    uniqueId,
-                    Session.defaultSession(uniqueId)
-            );
-            return;
-        }
+        var resetCachedSession = this.cachedSessions.computeIfPresent(
+                uniqueId,
+                (ignored, session) -> Session.defaultSession(uniqueId)
+        );
+        if (resetCachedSession != null) return;
         this.databaseHandler.reset(uniqueId);
     }
 
@@ -220,7 +227,12 @@ public class SessionHandler implements PlaytimeAPI {
      * Updates all {@link SessionHandler#cachedSessions} of online players.
      */
     private void updateSessions() {
-        this.cachedSessions.values().forEach(Session::update);
+        this.cachedSessions.forEach((uniqueId, ignored) ->
+                this.cachedSessions.computeIfPresent(uniqueId, (key, session) -> {
+                    session.update();
+                    return session;
+                })
+        );
     }
 
     /**
@@ -229,12 +241,8 @@ public class SessionHandler implements PlaytimeAPI {
      */
     public void shutdown() {
         if (this.sessionUpdater != null) this.sessionUpdater.cancel(false);
-        this.cachedSessions.values().forEach(session -> this.databaseHandler.update(
-                session.uniqueId(),
-                session.onlinetimeInMillis(),
-                session.playtimeInMillis(),
-                false
-        ));
+        for (var uniqueId : this.cachedSessions.keySet().toArray(UUID[]::new))
+            this.saveAndUncacheSession(uniqueId);
         this.cachedSessions.clear();
     }
 

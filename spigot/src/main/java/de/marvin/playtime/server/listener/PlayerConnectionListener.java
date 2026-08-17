@@ -35,14 +35,15 @@ public class PlayerConnectionListener implements Listener {
     public void handle(
             PlayerJoinEvent event
     ) {
+        var uniqueId = event.getPlayer().getUniqueId();
         var cacheDelay = this.config.cacheDelay();
         if (cacheDelay < 1) {
-            this.playtimeAPI.cacheSession(event.getPlayer().getUniqueId());
+            this.playtimeAPI.cacheSession(uniqueId);
             return;
         }
         this.plugin.getServer().getScheduler().runTaskLaterAsynchronously(
                 this.plugin,
-                () -> this.playtimeAPI.cacheSession(event.getPlayer().getUniqueId()),
+                () -> this.playtimeAPI.cacheSession(uniqueId),
                 cacheDelay
         );
     }

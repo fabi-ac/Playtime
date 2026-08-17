@@ -75,13 +75,14 @@ public class RedisConnection {
     public void cache(
             @NotNull Session session
     ) {
+        var snapshot = session.snapshot();
         this.memory.set(
                 this.onlinetimeKey(session.uniqueId()),
-                String.valueOf(session.onlinetimeInMillis())
+                String.valueOf(snapshot.onlinetimeInMillis())
         );
         this.memory.set(
                 this.playtimeKey(session.uniqueId()),
-                String.valueOf(session.playtimeInMillis())
+                String.valueOf(snapshot.playtimeInMillis())
         );
     }
 
