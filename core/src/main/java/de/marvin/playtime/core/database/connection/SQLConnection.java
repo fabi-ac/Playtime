@@ -1,4 +1,4 @@
-package de.marvin.playtime.core.database;
+package de.marvin.playtime.core.database.connection;
 
 import de.marvin.api.core.Cloud;
 import de.marvin.api.core.database.Database;

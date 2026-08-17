@@ -108,11 +108,7 @@ public class Server implements PlatformEntrypoint {
      * Registers all necessary listeners.
      */
     private void registerEvents() {
-        this.registerListener(new PlayerConnectionListener(
-                this.plugin,
-                api,
-                this.config
-        ));
+        this.registerListener(new PlayerConnectionListener(this.api));
 
         this.registerListener(this.playerActivityListener = new PlayerActivityListener(
                 this.plugin,

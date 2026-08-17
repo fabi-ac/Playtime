@@ -14,7 +14,6 @@ public class ConfigurationValues {
 
     // Spigot-specific
     private final Long afkThreshold;
-    private final Integer cacheDelay;
 
     /**
      * Creates an object that holds all configuration values.
@@ -26,13 +25,11 @@ public class ConfigurationValues {
     public ConfigurationValues(
             @NotNull String databaseTable,
             @NotNull String redisPrefix,
-            Long afkThreshold,
-            Integer cacheDelay
+            Long afkThreshold
     ) {
         this.databaseTable = databaseTable;
         this.redisPrefix = redisPrefix;
         this.afkThreshold = afkThreshold;
-        this.cacheDelay = cacheDelay;
     }
 
     /**
@@ -62,19 +59,6 @@ public class ConfigurationValues {
      */
     public Long afkThreshold() {
         return this.afkThreshold;
-    }
-
-    /**
-     * Gets ticks after which playtime should be retrieved out
-     * of Redis cache.
-     * <p>
-     * <b>Note:</b> Is only set on Spigot services.
-     *
-     * @return Ticks after which playtime should be retrieved out
-     * of Redis cache.
-     */
-    public Integer cacheDelay() {
-        return this.cacheDelay;
     }
 
 }

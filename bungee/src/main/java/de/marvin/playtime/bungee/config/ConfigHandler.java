@@ -37,7 +37,6 @@ public class ConfigHandler {
         return new ConfigurationValues(
                 this.databaseTable(),
                 this.redisPrefix(),
-                null,
                 null
         );
     }

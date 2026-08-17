@@ -198,6 +198,20 @@ public class Session {
     }
 
     /**
+     * Extracts the loaded {@link Session} from a {@link SessionState}.
+     *
+     * @param state Current {@link SessionState}, or {@code null}
+     * @return Loaded {@link Session}, or {@code null} while absent or loading
+     */
+    static @Nullable Session fromState(
+            @Nullable SessionState state
+    ) {
+        return state instanceof LoadedSession loadedSession
+                ? loadedSession.session()
+                : null;
+    }
+
+    /**
      * Immutable snapshot of a {@link Session}'s persisted time values.
      *
      * @param onlinetimeInMillis Onlinetime in milliseconds

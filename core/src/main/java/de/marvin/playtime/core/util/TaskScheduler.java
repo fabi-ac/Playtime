@@ -3,7 +3,10 @@ package de.marvin.playtime.core.util;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -15,14 +18,21 @@ import java.util.logging.Logger;
 public class TaskScheduler {
 
     /**
-     * Logger instance for logging.
+     * {@link Logger} instance for logging.
      */
     private static final Logger LOGGER = Logger.getLogger(TaskScheduler.class.getName());
 
     /**
-     * {@link ScheduledExecutorService} for scheduling tasks.
+     * {@link ScheduledExecutorService} for scheduling periodic tasks.
      */
-    private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(1);
+    private static final ScheduledExecutorService SCHEDULED_TASK_EXECUTOR =
+            Executors.newSingleThreadScheduledExecutor();
+
+    /**
+     * {@link ExecutorService} for independent asynchronous tasks that may block.
+     */
+    private static final ExecutorService ASYNC_TASK_EXECUTOR =
+            Executors.newVirtualThreadPerTaskExecutor();
 
     /**
      * Schedules a repeating task with a fixed delay and period.
@@ -40,15 +50,35 @@ public class TaskScheduler {
             long period,
             @NotNull TimeUnit timeUnit
     ) {
-        if (SCHEDULER.isShutdown()) return null;
-        return SCHEDULER.scheduleAtFixedRate(task, delay, period, timeUnit);
+        try {
+            return SCHEDULED_TASK_EXECUTOR.scheduleAtFixedRate(task, delay, period, timeUnit);
+        } catch (RejectedExecutionException exception) {
+            return null;
+        }
     }
 
     /**
-     * Shuts down the {@link ScheduledExecutorService}.
+     * Executes a task asynchronously without blocking the periodic task executor.
+     *
+     * @param task Task to execute
+     * @return {@link Future} representing the task, or {@code null} if the executor is shut down
+     */
+    public static @Nullable Future<?> executeTask(
+            @NotNull Runnable task
+    ) {
+        try {
+            return ASYNC_TASK_EXECUTOR.submit(task);
+        } catch (RejectedExecutionException exception) {
+            return null;
+        }
+    }
+
+    /**
+     * Shuts down the periodic and asynchronous task executors and interrupts tasks that are still running.
      */
     public static void shutdown() {
-        SCHEDULER.shutdown();
+        SCHEDULED_TASK_EXECUTOR.shutdownNow();
+        ASYNC_TASK_EXECUTOR.shutdownNow();
         LOGGER.info("TaskScheduler has been shut down.");
     }
 

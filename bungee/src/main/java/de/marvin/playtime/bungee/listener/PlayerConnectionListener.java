@@ -2,14 +2,11 @@ package de.marvin.playtime.bungee.listener;
 
 import de.marvin.playtime.core.database.DatabaseHandler;
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
-import net.md_5.bungee.api.event.PostLoginEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
 
-import de.marvin.playtime.core.session.Session;
-
 /**
- * Listens to connection events to load and save {@link Session}.
+ * Persists session data from Redis when a player disconnects from the proxy.
  */
 public class PlayerConnectionListener implements Listener {
 
@@ -22,19 +19,7 @@ public class PlayerConnectionListener implements Listener {
     }
 
     /**
-     * Caches user's {@link Session}.
-     *
-     * @param event login event
-     */
-    @EventHandler
-    public void handle(
-            PostLoginEvent event
-    ) {
-        this.databaseHandler.cache(event.getPlayer().getUniqueId());
-    }
-
-    /**
-     * Saves and uncaches user's {@link Session}.
+     * Saves and uncaches the player's session.
      *
      * @param event player disconnect event
      */

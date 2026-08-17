@@ -23,8 +23,7 @@ public class Config extends ConfigHandler {
         return new ConfigurationValues(
                 this.databaseTable(),
                 this.redisPrefix(),
-                this.afkThreshold(),
-                this.cacheDelay()
+                this.afkThreshold()
         );
     }
 
@@ -53,17 +52,6 @@ public class Config extends ConfigHandler {
      */
     public long afkThreshold() {
         return this.getLong("afk-threshold", 300) * 1000L;
-    }
-
-    /**
-     * Gets ticks after which playtime should be retrieved out
-     * of Redis cache.
-     *
-     * @return Ticks after which playtime should be retrieved out
-     * of Redis cache.
-     */
-    public int cacheDelay() {
-        return this.getInt("cache-delay", -1);
     }
 
     /**

@@ -8,9 +8,6 @@ redis-prefix: playtime
 # when no activity is detected.
 afk-threshold: 300
 
-# Delay in ticks before playtime is cached to Redis.
-cache-delay: -1
-
 # Messages
 messages:
   player-not-found: '§cPlayer was not found.'

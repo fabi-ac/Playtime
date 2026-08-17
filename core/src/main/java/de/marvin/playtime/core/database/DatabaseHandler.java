@@ -2,6 +2,8 @@ package de.marvin.playtime.core.database;
 
 import de.marvin.api.core.utils.CloudFuture;
 import de.marvin.playtime.core.config.ConfigurationValues;
+import de.marvin.playtime.core.database.connection.RedisConnection;
+import de.marvin.playtime.core.database.connection.SQLConnection;
 import de.marvin.playtime.core.session.Session;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -23,34 +25,34 @@ public class DatabaseHandler {
     }
 
     /**
-     * Caches the {@link Session} of a player found in the database.
+     * Loads the {@link Session} of a player from Redis, falling back to SQL when no cached session exists.
      *
      * @param uniqueId {@link UUID} of the player
-     * @return {@link CloudFuture} containing the player's {@link Session},
-     * or a new {@link Session} with default values if not found.
+     * @return {@link CloudFuture} containing the {@link SessionLoadResult}
      */
-    public CloudFuture<Session> cache(
+    public CloudFuture<SessionLoadResult> session(
             @NotNull UUID uniqueId
     ) {
-        return this.sqlConnection.session(uniqueId).map(session -> {
-            this.redisConnection.cache(session);
-            return session;
-        });
+        var cachedSession = this.redisConnection.session(uniqueId);
+        if (cachedSession != null) return new CloudFuture<>(SessionLoadResult.of(
+                cachedSession,
+                SessionLoadResult.DataSource.REDIS
+        ));
+        return this.sqlConnection.session(uniqueId).map(session -> SessionLoadResult.of(
+                session,
+                SessionLoadResult.DataSource.SQL
+        ));
     }
 
     /**
-     * Retrieves the cached {@link Session} of given {@link UUID}
-     * from Redis. If not cached, a default {@link Session} is returned.
+     * Caches a loaded {@link Session} in Redis.
      *
-     * @param uniqueId {@link UUID} of the player
-     * @return {@link Session} of given {@link UUID},
-     * or a default {@link Session} if not cached.
+     * @param session {@link Session} to cache
      */
-    public Session session(
-            @NotNull UUID uniqueId
+    public void cache(
+            @NotNull Session session
     ) {
-        var session = this.redisConnection.session(uniqueId);
-        return session != null ? session : Session.defaultSession(uniqueId);
+        this.redisConnection.cache(session);
     }
 
     /**
@@ -59,14 +61,12 @@ public class DatabaseHandler {
      * only returns {@code null} if not found in both.
      *
      * @param uniqueId {@link UUID} of the player
-     * @return {@link CloudFuture} containing the player's {@link Session}.
+     * @return {@link CloudFuture} containing the {@link SessionLoadResult}
      */
-    public CloudFuture<Session> forceSession(
+    public CloudFuture<SessionLoadResult> forceSession(
             @NotNull UUID uniqueId
     ) {
-        var session = this.redisConnection.session(uniqueId);
-        if (session != null) return new CloudFuture<>(session);
-        return this.sqlConnection.session(uniqueId);
+        return this.session(uniqueId);
     }
 
     /**

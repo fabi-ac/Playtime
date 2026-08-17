@@ -38,7 +38,8 @@ public final class Playtime {
 
         api = new SessionHandler(
                 this.databaseHandler,
-                this.configurationValues
+                this.configurationValues,
+                logger
         );
 
         logger.info("Initialized playtime system core.");
