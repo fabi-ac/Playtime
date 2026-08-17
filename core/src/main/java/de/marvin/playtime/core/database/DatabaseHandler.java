@@ -11,6 +11,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 import java.util.logging.Logger;
 
+/**
+ * Handles the storage and retrieval of {@link Session}.
+ */
 public class DatabaseHandler {
 
     private final SQLConnection sqlConnection;
@@ -56,9 +59,8 @@ public class DatabaseHandler {
     }
 
     /**
-     * Forces retrieval of the {@link Session} of given {@link UUID}
-     * first from Redis, then from the database if not cached and
-     * only returns {@code null} if not found in both.
+     * Forces retrieval of the {@link Session} of given player first from Redis, then from the database if not
+     * cached and only returns {@code null} if not found in both.
      *
      * @param uniqueId {@link UUID} of the player
      * @return {@link CloudFuture} containing the {@link SessionLoadResult}
@@ -70,8 +72,7 @@ public class DatabaseHandler {
     }
 
     /**
-     * Saves and uncaches the {@link Session} of given {@link UUID}
-     * from Redis to the database if cached.
+     * Saves and uncaches the {@link Session} of given player from Redis to the database if cached.
      *
      * @param uniqueId {@link UUID} of the player
      */
@@ -89,15 +90,13 @@ public class DatabaseHandler {
     }
 
     /**
-     * Updates the {@link Session} of given {@link UUID}
-     * either in Redis if cached or in the database directly
-     * if no cached data was found.
+     * Updates the {@link Session} of given player either in Redis if cached or in the database directly if no
+     * cached data was found.
      *
      * @param uniqueId           {@link UUID} of the player
-     * @param onlinetimeInMillis onlinetime in milliseconds
-     * @param playtimeInMillis   playtime in milliseconds
-     * @param force              whether to overwrite database update
-     *                           restrictions
+     * @param onlinetimeInMillis Onlinetime in milliseconds
+     * @param playtimeInMillis   Playtime in milliseconds
+     * @param force              Whether to overwrite database update restrictions
      */
     public void update(
             @NotNull UUID uniqueId,
@@ -105,24 +104,7 @@ public class DatabaseHandler {
             @Nullable Long playtimeInMillis,
             boolean force
     ) {
-        if (this.redisConnection.exists(uniqueId)) {
-            var currentSession = this.redisConnection.session(uniqueId);
-            if (currentSession == null)
-                currentSession = Session.defaultSession(uniqueId);
-            var currentSnapshot = currentSession.snapshot();
-            this.redisConnection.cache(
-                    new Session(
-                            uniqueId,
-                            onlinetimeInMillis != null
-                                    ? onlinetimeInMillis
-                                    : currentSnapshot.onlinetimeInMillis(),
-                            playtimeInMillis != null
-                                    ? playtimeInMillis
-                                    : currentSnapshot.playtimeInMillis()
-                    )
-            );
-            return;
-        }
+        if (this.redisConnection.update(uniqueId, onlinetimeInMillis, playtimeInMillis)) return;
         if (force) {
             this.sqlConnection.update(
                     uniqueId,
@@ -139,25 +121,15 @@ public class DatabaseHandler {
     }
 
     /**
-     * Resets the {@link Session} of given {@link UUID}
-     * either in Redis if cached or in the database directly
-     * if no cached data was found.
+     * Resets the {@link Session} of given player either in Redis if cached or in the database directly if no
+     * cached data was found.
      *
      * @param uniqueId {@link UUID} of the player
      */
     public void reset(
             @NotNull UUID uniqueId
     ) {
-        if (this.redisConnection.exists(uniqueId)) {
-            var defaultSession = Session.defaultSession(uniqueId);
-            this.update(
-                    uniqueId,
-                    defaultSession.onlinetimeInMillis(),
-                    defaultSession.playtimeInMillis(),
-                    true
-            );
-            return;
-        }
+        if (this.redisConnection.update(uniqueId, 0L, 0L)) return;
         this.sqlConnection.delete(uniqueId);
     }
 
