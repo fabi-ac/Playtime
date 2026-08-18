@@ -4,38 +4,52 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Holds information about a player's online- and playtime.
  */
 public class Session {
 
+    private static final long NANOSECONDS_PER_MILLISECOND = TimeUnit.MILLISECONDS.toNanos(1);
+
     /**
      * {@link UUID} of the player.
      */
-    @NotNull private final UUID uniqueId;
+    @NotNull
+    private final UUID uniqueId;
 
     /**
-     * Online time of the player in milliseconds.
+     * Online time of the player in nanoseconds.
      */
-    private long onlinetimeInMillis;
+    private long onlinetimeInNanos;
     /**
-     * Play time of the player in milliseconds.
+     * Play time of the player in nanoseconds.
      */
-    private long playtimeInMillis;
+    private long playtimeInNanos;
 
     /**
-     * Determines, if playtime should be counted.
+     * Timestamp of the last accumulated session state.
+     */
+    private long lastUpdateNanos;
+    /**
+     * Timestamp of the player's last activity.
+     */
+    private long lastActivityNanos;
+
+    /**
+     * Whether playtime currently should be counted.
      */
     private boolean countPlaytime;
     /**
-     * Determines, if player currently is away from keyboard and no playtime should be counted.
+     * Whether the player currently is away from keyboard and no playtime should be counted.
      */
     private boolean awayFromKeyboard;
+
     /**
-     * Timestamp in milliseconds at which the player's last activity took place.
+     * Whether time should currently be tracked in this {@link Session}.
      */
-    private long lastActivity;
+    private boolean trackingTime;
 
     /**
      * Creates a new {@link Session} instance.
@@ -43,6 +57,7 @@ public class Session {
      * @param uniqueId           {@link UUID} of the player
      * @param onlinetimeInMillis Onlinetime in milliseconds
      * @param playtimeInMillis   Playtime in milliseconds
+     * @throws ArithmeticException If either time exceeds the nanosecond range
      */
     public Session(
             @NotNull UUID uniqueId,
@@ -51,12 +66,16 @@ public class Session {
     ) {
         this.uniqueId = uniqueId;
 
-        this.onlinetimeInMillis = onlinetimeInMillis;
-        this.playtimeInMillis = playtimeInMillis;
+        this.onlinetimeInNanos = Session.toNanos(onlinetimeInMillis);
+        this.playtimeInNanos = Session.toNanos(playtimeInMillis);
+
+        this.lastUpdateNanos = System.nanoTime();
+        this.lastActivityNanos = this.lastUpdateNanos;
 
         this.countPlaytime = false;
         this.awayFromKeyboard = false;
-        this.lastActivity = System.currentTimeMillis();
+
+        this.trackingTime = false;
     }
 
     /**
@@ -69,21 +88,33 @@ public class Session {
     }
 
     /**
-     * Returns the onlinetime in milliseconds.
+     * Returns the current onlinetime in milliseconds.
      *
      * @return Onlinetime in milliseconds
      */
     public synchronized long onlinetimeInMillis() {
-        return this.onlinetimeInMillis;
+        this.accumulateElapsedTime(System.nanoTime());
+        return Session.toMillis(this.onlinetimeInNanos);
     }
 
     /**
-     * Returns the playtime in milliseconds.
+     * Returns the current playtime in milliseconds.
      *
      * @return Playtime in milliseconds
      */
     public synchronized long playtimeInMillis() {
-        return this.playtimeInMillis;
+        this.accumulateElapsedTime(System.nanoTime());
+        return Session.toMillis(this.playtimeInNanos);
+    }
+
+    /**
+     * Returns a {@link Snapshot} of the {@link Session}'s persisted time values.
+     *
+     * @return {@link Snapshot} of onlinetime and playtime in milliseconds
+     */
+    public synchronized @NotNull Snapshot snapshot() {
+        this.accumulateElapsedTime(System.nanoTime());
+        return this.currentSnapshot();
     }
 
     /**
@@ -96,93 +127,178 @@ public class Session {
     }
 
     /**
-     * Returns whether player currently is away from keyboard or not.
+     * Returns whether the player is currently away from keyboard.
      *
-     * @return {@code true} if player currently is afk, {@code false} otherwise
+     * @return {@code true} if player currently is AFK, {@code false} otherwise
      */
     public synchronized boolean awayFromKeyboard() {
+        this.accumulateElapsedTime(System.nanoTime());
         return this.awayFromKeyboard;
     }
 
     /**
-     * Returns timestamp in milliseconds at which the player's last activity took place.
-     *
-     * @return Timestamp in milliseconds at which the player's last activity took place
-     */
-    public synchronized long lastActivity() {
-        return this.lastActivity;
-    }
-
-    /**
-     * Returns a consistent snapshot of the session's persisted time values.
-     *
-     * @return {@link Snapshot} of onlinetime and playtime in milliseconds
-     */
-    public synchronized Snapshot snapshot() {
-        return new Snapshot(
-                this.onlinetimeInMillis,
-                this.playtimeInMillis
-        );
-    }
-
-    /**
-     * Sets whether playtime should be counted or not.
+     * Sets whether playtime should be counted.
      *
      * @param countPlaytime Playtime counting status
      */
     public synchronized void setCountPlaytime(
             boolean countPlaytime
     ) {
+        this.accumulateElapsedTime(System.nanoTime());
         this.countPlaytime = countPlaytime;
     }
 
     /**
-     * Sets whether the player is away from keyboard or not.
+     * Sets whether the player is away from keyboard.
      *
      * @param awayFromKeyboard AFK status
      */
     public synchronized void setAwayFromKeyboard(
             boolean awayFromKeyboard
     ) {
+        this.accumulateElapsedTime(System.nanoTime());
         this.awayFromKeyboard = awayFromKeyboard;
     }
 
     /**
-     * Updates last activity timestamp.
+     * Accumulates elapsed time up to the activity and updates the {@link Session#lastActivityNanos} timestamp.
+     * <p>
+     * <b>Note:</b> Since this method is called on a player activity, it also clears the AFK status if it was
+     * set previously.
      */
     public synchronized void updateLastActivity() {
-        this.lastActivity = System.currentTimeMillis();
+        var nowNanos = System.nanoTime();
+        this.accumulateElapsedTime(nowNanos);
+        this.lastActivityNanos = nowNanos;
         if (this.awayFromKeyboard) this.awayFromKeyboard = false;
     }
 
     /**
-     * Updates the sessions {@link Session#onlinetimeInMillis} and {@link Session#playtimeInMillis} with given
-     * values if not null.
+     * Updates the {@link Session}'s {@link Session#onlinetimeInMillis} and {@link Session#playtimeInMillis}
+     * with given values if not null.
      *
      * @param onlinetimeInMillis New onlinetime in milliseconds
      * @param playtimeInMillis   New playtime in milliseconds
+     * @throws ArithmeticException If either specified time exceeds the nanosecond range
      */
     public synchronized void update(
             @Nullable Long onlinetimeInMillis,
             @Nullable Long playtimeInMillis
     ) {
-        if (onlinetimeInMillis != null) this.onlinetimeInMillis = onlinetimeInMillis;
-        if (playtimeInMillis != null) this.playtimeInMillis = playtimeInMillis;
+        this.accumulateElapsedTime(System.nanoTime());
+        if (onlinetimeInMillis != null)
+            this.onlinetimeInNanos = Session.toNanos(onlinetimeInMillis);
+        if (playtimeInMillis != null)
+            this.playtimeInNanos = Session.toNanos(playtimeInMillis);
     }
 
     /**
-     * Updates the sessions {@link Session#onlinetimeInMillis} and {@link Session#playtimeInMillis} based on
-     * the {@link Session}'s state.
+     * Accumulates the time elapsed since the previous update based on the {@link Session}'s state.
      */
     public synchronized void update() {
-        this.onlinetimeInMillis += 1000L;
-        if (!this.countPlaytime) return;
-        if (this.awayFromKeyboard) return;
-        if (this.lastActivity + SessionHandler.afkThreshold() <= System.currentTimeMillis()) {
-            this.setAwayFromKeyboard(true);
-            return;
-        }
-        this.playtimeInMillis += 1000L;
+        this.accumulateElapsedTime(System.nanoTime());
+    }
+
+    /**
+     * Adds persisted base values without changing the time measured locally since this {@link Session} was
+     * created.
+     *
+     * @param onlinetimeInMillis Onlinetime to add, or {@code null}
+     * @param playtimeInMillis   Playtime to add, or {@code null}
+     * @throws ArithmeticException If conversion or addition exceeds the nanosecond range
+     */
+    synchronized void addPersistedTime(
+            @Nullable Long onlinetimeInMillis,
+            @Nullable Long playtimeInMillis
+    ) {
+        this.accumulateElapsedTime(System.nanoTime());
+        if (onlinetimeInMillis != null)
+            this.onlinetimeInNanos = Math.addExact(
+                    this.onlinetimeInNanos,
+                    Session.toNanos(onlinetimeInMillis)
+            );
+        if (playtimeInMillis != null)
+            this.playtimeInNanos = Math.addExact(
+                    this.playtimeInNanos,
+                    Session.toNanos(playtimeInMillis)
+            );
+    }
+
+    /**
+     * Starts measuring elapsed time for this {@link Session} from its creation timestamp.
+     */
+    synchronized void startTracking() {
+        if (this.trackingTime) return;
+        this.trackingTime = true;
+    }
+
+    /**
+     * Accumulates all remaining elapsed time, stops time measurement and returns the persisted values.
+     *
+     * @return {@link Snapshot} of onlinetime and playtime in milliseconds
+     */
+    synchronized Snapshot finishTracking() {
+        this.accumulateElapsedTime(System.nanoTime());
+        this.trackingTime = false;
+        return this.currentSnapshot();
+    }
+
+    /**
+     * Resets this {@link Session} while retaining active time measurement.
+     */
+    synchronized void reset() {
+        var nowNanos = System.nanoTime();
+        this.accumulateElapsedTime(nowNanos);
+        this.onlinetimeInNanos = 0;
+        this.playtimeInNanos = 0;
+        this.countPlaytime = false;
+        this.awayFromKeyboard = false;
+        this.lastActivityNanos = nowNanos;
+    }
+
+    /**
+     * Accumulates the elapsed time since the previous update according to the {@link Session} state during
+     * that interval. If no playtime is counted at the time or the player is marked as AFK, no elapsed
+     * playtime is accumulated. If the {@link SessionHandler#afkThreshold()} was crossed, only the part
+     * before the threshold is added to playtime.
+     *
+     * @param nowNanos Current timestamp in nanoseconds
+     */
+    private void accumulateElapsedTime(
+            long nowNanos
+    ) {
+        if (!this.trackingTime) return;
+
+        // Onlinetime
+        var intervalStartNanos = this.lastUpdateNanos;
+        var elapsedNanos = nowNanos - intervalStartNanos;
+        if (elapsedNanos <= 0) return;
+        this.lastUpdateNanos = nowNanos;
+        this.onlinetimeInNanos = Math.addExact(this.onlinetimeInNanos, elapsedNanos);
+
+        // If playtime is not counted or player is away from keyboard, skip playtime accumulation
+        if (!this.countPlaytime || this.awayFromKeyboard) return;
+
+        // Playtime
+        var afkThresholdNanos = TimeUnit.MILLISECONDS.toNanos(SessionHandler.afkThreshold());
+        var nanosUntilAfk = afkThresholdNanos - (intervalStartNanos - this.lastActivityNanos);
+        if (nanosUntilAfk > 0) this.playtimeInNanos = Math.addExact(
+                this.playtimeInNanos,
+                Math.min(elapsedNanos, nanosUntilAfk)
+        );
+        if (nowNanos - this.lastActivityNanos >= afkThresholdNanos) this.awayFromKeyboard = true;
+    }
+
+    /**
+     * Returns the persisted values without accumulating additional elapsed time.
+     *
+     * @return Current {@link Snapshot} of onlinetime and playtime in milliseconds
+     */
+    private @NotNull Snapshot currentSnapshot() {
+        return new Snapshot(
+                Session.toMillis(this.onlinetimeInNanos),
+                Session.toMillis(this.playtimeInNanos)
+        );
     }
 
     /**
@@ -191,10 +307,35 @@ public class Session {
      * @param uniqueId {@link UUID} of the player
      * @return Default {@link Session}
      */
-    public static Session defaultSession(
+    public static @NotNull Session defaultSession(
             @NotNull UUID uniqueId
     ) {
         return new Session(uniqueId, 0, 0);
+    }
+
+    /**
+     * Converts milliseconds to nanoseconds.
+     *
+     * @param milliseconds Time in milliseconds
+     * @return Time in nanoseconds
+     * @throws ArithmeticException If the converted value exceeds the range of a {@code long}
+     */
+    private static long toNanos(
+            long milliseconds
+    ) {
+        return Math.multiplyExact(milliseconds, NANOSECONDS_PER_MILLISECOND);
+    }
+
+    /**
+     * Converts the nanoseconds to milliseconds.
+     *
+     * @param nanoseconds Time in nanoseconds
+     * @return Time in milliseconds
+     */
+    private static long toMillis(
+            long nanoseconds
+    ) {
+        return nanoseconds / NANOSECONDS_PER_MILLISECOND;
     }
 
     /**
@@ -206,8 +347,8 @@ public class Session {
     static @Nullable Session fromState(
             @Nullable SessionState state
     ) {
-        return state instanceof LoadedSession loadedSession
-                ? loadedSession.session()
+        return state instanceof LoadedSession(Session session)
+                ? session
                 : null;
     }
 

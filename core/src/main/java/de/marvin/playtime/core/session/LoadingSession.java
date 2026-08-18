@@ -6,17 +6,40 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * Represents a {@link Session} whose Redis or SQL load has not completed yet. Updates received while loading
- * are retained and applied to the loaded {@link Session} before it is published to the local cache.
+ * Represents a {@link Session} whose Redis or SQL load has not completed yet. Time and state changes received
+ * while loading are measured locally and merged with the persisted values before publication to the local cache.
  */
 final class LoadingSession implements SessionState {
 
-    private Long onlinetimeInMillis;
-    private Long playtimeInMillis;
-    private Boolean countPlaytime;
-    private Boolean awayFromKeyboard;
-    private boolean activityUpdated;
+    /**
+     * Represents the {@link Session} object that has not been fully loaded from the database yet.
+     */
+    private final Session pendingSession;
+
+    /**
+     * Whether the onlinetime was overridden manually.
+     */
+    private boolean onlinetimeOverridden;
+    /**
+     * Whether the playtime was overridden manually.
+     */
+    private boolean playtimeOverridden;
+    /**
+     * Whether the online- and playtime were reset.
+     */
     private boolean reset;
+
+    /**
+     * Creates a loading state and records when local time measurement should begin.
+     *
+     * @param uniqueId {@link UUID} of the player
+     */
+    LoadingSession(
+            @NotNull UUID uniqueId
+    ) {
+        this.pendingSession = Session.defaultSession(uniqueId);
+        this.pendingSession.startTracking();
+    }
 
     /**
      * Retains updated time values until the session load completes. A {@code null} value leaves the
@@ -29,8 +52,9 @@ final class LoadingSession implements SessionState {
             @Nullable Long onlinetimeInMillis,
             @Nullable Long playtimeInMillis
     ) {
-        if (onlinetimeInMillis != null) this.onlinetimeInMillis = onlinetimeInMillis;
-        if (playtimeInMillis != null) this.playtimeInMillis = playtimeInMillis;
+        this.pendingSession.update(onlinetimeInMillis, playtimeInMillis);
+        if (onlinetimeInMillis != null) this.onlinetimeOverridden = true;
+        if (playtimeInMillis != null) this.playtimeOverridden = true;
     }
 
     /**
@@ -41,7 +65,7 @@ final class LoadingSession implements SessionState {
     void setCountPlaytime(
             boolean countPlaytime
     ) {
-        this.countPlaytime = countPlaytime;
+        this.pendingSession.setCountPlaytime(countPlaytime);
     }
 
     /**
@@ -52,7 +76,7 @@ final class LoadingSession implements SessionState {
     void setAwayFromKeyboard(
             boolean awayFromKeyboard
     ) {
-        this.awayFromKeyboard = awayFromKeyboard;
+        this.pendingSession.setAwayFromKeyboard(awayFromKeyboard);
     }
 
     /**
@@ -60,48 +84,37 @@ final class LoadingSession implements SessionState {
      * status, matching {@link Session#updateLastActivity()}.
      */
     void updateLastActivity() {
-        this.activityUpdated = true;
-        this.awayFromKeyboard = false;
+        this.pendingSession.updateLastActivity();
     }
 
     /**
      * Marks the pending {@link Session} for reset and discards previously retained time updates.
      */
     void reset() {
+        this.pendingSession.reset();
         this.reset = true;
-        this.onlinetimeInMillis = null;
-        this.playtimeInMillis = null;
-        this.countPlaytime = null;
-        this.awayFromKeyboard = null;
-        this.activityUpdated = false;
+        this.onlinetimeOverridden = false;
+        this.playtimeOverridden = false;
     }
 
     /**
-     * Resolves this loading state into a usable {@link Session}. A pending reset is applied first, followed by
-     * retained time updates.
+     * Resolves this loading state into a usable {@link Session}. Unless reset or explicitly overridden while
+     * loading, persisted values are added to the time already measured locally.
      *
-     * @param uniqueId     {@link UUID} of the player
      * @param loadedSession {@link Session} loaded from Redis or SQL
      * @return Resolved {@link Session} containing all changes received while loading
      */
     Session resolve(
-            @NotNull UUID uniqueId,
             @NotNull Session loadedSession
     ) {
-        var resolvedSession = this.reset
-                ? Session.defaultSession(uniqueId)
-                : loadedSession;
-        resolvedSession.update(
-                this.onlinetimeInMillis,
-                this.playtimeInMillis
+        if (this.reset) return this.pendingSession;
+
+        var loadedSnapshot = loadedSession.snapshot();
+        this.pendingSession.addPersistedTime(
+                this.onlinetimeOverridden ? null : loadedSnapshot.onlinetimeInMillis(),
+                this.playtimeOverridden ? null : loadedSnapshot.playtimeInMillis()
         );
-        if (this.countPlaytime != null)
-            resolvedSession.setCountPlaytime(this.countPlaytime);
-        if (this.activityUpdated)
-            resolvedSession.updateLastActivity();
-        if (this.awayFromKeyboard != null)
-            resolvedSession.setAwayFromKeyboard(this.awayFromKeyboard);
-        return resolvedSession;
+        return this.pendingSession;
     }
 
 }

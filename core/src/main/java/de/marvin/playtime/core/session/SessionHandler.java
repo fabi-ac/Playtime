@@ -25,7 +25,7 @@ public class SessionHandler implements PlaytimeAPI {
     private final DatabaseHandler databaseHandler;
     private final Logger logger;
 
-    private static Long afkThreshold = 300000L;
+    private static long afkThreshold = 300000L;
 
     /**
      * Holds the loading or loaded state of currently online players.
@@ -57,7 +57,9 @@ public class SessionHandler implements PlaytimeAPI {
         this.databaseHandler = databaseHandler;
         this.logger = logger;
 
-        SessionHandler.afkThreshold = configurationValues.afkThreshold();
+        var configuredAfkThreshold = configurationValues.afkThreshold();
+        if (configuredAfkThreshold != null)
+            SessionHandler.afkThreshold = configuredAfkThreshold;
     }
 
     /**
@@ -70,7 +72,7 @@ public class SessionHandler implements PlaytimeAPI {
     ) {
         if (this.shuttingDown.get()) return;
 
-        var loadingSession = new LoadingSession();
+        var loadingSession = new LoadingSession(uniqueId);
         this.sessions.put(uniqueId, loadingSession);
         if (this.shuttingDown.get()) {
             this.sessions.remove(uniqueId, loadingSession);
@@ -119,7 +121,7 @@ public class SessionHandler implements PlaytimeAPI {
     ) {
         this.sessions.computeIfPresent(uniqueId, (ignored, currentState) -> {
             if (currentState != loadingSession) return currentState;
-            var resolvedSession = loadingSession.resolve(uniqueId, result.session());
+            var resolvedSession = loadingSession.resolve(result.session());
             var loadedSession = new LoadedSession(resolvedSession);
             if (result.source() == SessionLoadResult.DataSource.REDIS) return loadedSession;
             try {
@@ -234,7 +236,7 @@ public class SessionHandler implements PlaytimeAPI {
     ) {
         var session = Session.fromState(this.sessions.remove(uniqueId));
         if (session == null) return;
-        var snapshot = session.snapshot();
+        var snapshot = session.finishTracking();
         this.databaseHandler.update(
                 uniqueId,
                 snapshot.onlinetimeInMillis(),
@@ -292,9 +294,10 @@ public class SessionHandler implements PlaytimeAPI {
         var state = this.sessions.computeIfPresent(uniqueId, (ignored, currentState) -> {
             if (currentState instanceof LoadingSession loadingSession) {
                 loadingSession.reset();
-                return loadingSession;
+            } else if (currentState instanceof LoadedSession(Session session)) {
+                session.reset();
             }
-            return new LoadedSession(Session.defaultSession(uniqueId));
+            return currentState;
         });
         if (state != null) return;
         this.databaseHandler.reset(uniqueId);
