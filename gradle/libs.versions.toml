@@ -25,7 +25,8 @@ spigot = { group = "org.spigotmc", name = "spigot-api", version.ref = "spigot" }
 cloudnet-platform-inject-api = { group = "eu.cloudnetservice.cloudnet", name = "platform-inject-api", version.ref = "cloudnet" }
 cloudnet-driver = { group = "eu.cloudnetservice.cloudnet", name = "driver-api", version.ref = "cloudnet" }
 cloudnet-bridge = { group = "eu.cloudnetservice.cloudnet", name = "bridge-api", version.ref = "cloudnet" }
+cloudnet-wrapper-jvm = { group = "eu.cloudnetservice.cloudnet", name = "wrapper-jvm-api", version.ref = "cloudnet" }
 cloudnet-platform-inject-processor = { group = "eu.cloudnetservice.cloudnet", name = "platform-inject-processor", version.ref = "cloudnet" }
 
 [bundles]
-cloudnet = ["cloudnet-platform-inject-api", "cloudnet-driver", "cloudnet-bridge"]
+cloudnet = ["cloudnet-platform-inject-api", "cloudnet-driver", "cloudnet-bridge", "cloudnet-wrapper-jvm"]

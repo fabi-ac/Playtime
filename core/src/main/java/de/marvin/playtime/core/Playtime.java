@@ -3,7 +3,10 @@ package de.marvin.playtime.core;
 import de.marvin.playtime.core.config.ConfigurationValues;
 import de.marvin.playtime.core.database.DatabaseHandler;
 import de.marvin.playtime.core.session.SessionHandler;
+import eu.cloudnetservice.driver.provider.CloudServiceProvider;
+import eu.cloudnetservice.wrapper.configuration.WrapperConfiguration;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.logging.Logger;
 
@@ -24,7 +27,25 @@ public final class Playtime {
      */
     public void setup(
             @NotNull Logger logger,
-            @NotNull ConfigurationValues configurationValues
+            @NotNull ConfigurationValues configurationValues,
+            @NotNull CloudServiceProvider cloudServiceProvider
+    ) {
+        this.setup(logger, configurationValues, null, cloudServiceProvider);
+    }
+
+    /**
+     * Initializes {@link Playtime} core for a backend service that can own player sessions.
+     *
+     * @param logger              {@link Logger} instance to use
+     * @param configurationValues {@link ConfigurationValues} to use
+     * @param wrapperConfiguration {@link WrapperConfiguration} of the current service
+     * @param cloudServiceProvider {@link CloudServiceProvider} instance to use
+     */
+    public void setup(
+            @NotNull Logger logger,
+            @NotNull ConfigurationValues configurationValues,
+            @Nullable WrapperConfiguration wrapperConfiguration,
+            @Nullable CloudServiceProvider cloudServiceProvider
     ) {
         if (initialized) throw new IllegalStateException("PlaytimeAPI core is already initialized.");
         initialized = true;
@@ -33,13 +54,16 @@ public final class Playtime {
 
         this.databaseHandler = new DatabaseHandler(
                 logger,
-                this.configurationValues
+                this.configurationValues,
+                wrapperConfiguration,
+                cloudServiceProvider
         );
 
         api = new SessionHandler(
                 this.databaseHandler,
                 this.configurationValues,
-                logger
+                logger,
+                wrapperConfiguration != null
         );
 
         logger.info("Initialized playtime system core.");

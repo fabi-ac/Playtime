@@ -27,7 +27,7 @@ public class PlayerConnectionListener implements Listener {
     public void handle(
             PlayerDisconnectEvent event
     ) {
-        this.databaseHandler.saveAndUncache(event.getPlayer().getUniqueId());
+        this.databaseHandler.saveAndUncacheAsynchronously(event.getPlayer().getUniqueId());
     }
 
 }

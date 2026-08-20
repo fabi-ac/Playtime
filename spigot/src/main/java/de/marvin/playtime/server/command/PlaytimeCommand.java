@@ -215,7 +215,7 @@ public class PlaytimeCommand implements CommandExecutor {
             return;
         }
 
-        this.playtimeAPI.forceSession(cloudOfflinePlayer.uniqueId()).onSuccess(session -> {
+        this.playtimeAPI.sessionOrDefault(cloudOfflinePlayer.uniqueId()).onSuccess(session -> {
             var snapshot = session.snapshot();
             var playtime = TimeConverter.convertMillisToDaysHoursMinutes(
                     snapshot.playtimeInMillis(),

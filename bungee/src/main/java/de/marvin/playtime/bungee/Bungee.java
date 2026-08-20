@@ -4,6 +4,7 @@ import de.marvin.playtime.bungee.config.ConfigHandler;
 import de.marvin.playtime.bungee.listener.PlayerConnectionListener;
 import de.marvin.playtime.core.Playtime;
 import de.marvin.playtime.core.database.DatabaseHandler;
+import eu.cloudnetservice.driver.provider.CloudServiceProvider;
 import eu.cloudnetservice.ext.platforminject.api.PlatformEntrypoint;
 import eu.cloudnetservice.ext.platforminject.api.stereotype.Dependency;
 import eu.cloudnetservice.ext.platforminject.api.stereotype.PlatformPlugin;
@@ -34,6 +35,8 @@ public class Bungee implements PlatformEntrypoint {
     private final Plugin plugin;
     private final PluginManager pluginManager;
 
+    private final CloudServiceProvider cloudServiceProvider;
+
     private ConfigHandler config;
 
     private DatabaseHandler databaseHandler;
@@ -41,10 +44,12 @@ public class Bungee implements PlatformEntrypoint {
     @Inject
     public Bungee(
             @NotNull Plugin plugin,
-            @NotNull PluginManager pluginManager
+            @NotNull PluginManager pluginManager,
+            @NotNull CloudServiceProvider cloudServiceProvider
     ) {
         this.plugin = plugin;
         this.pluginManager = pluginManager;
+        this.cloudServiceProvider = cloudServiceProvider;
     }
 
     @Override
@@ -57,7 +62,8 @@ public class Bungee implements PlatformEntrypoint {
         var playtime = new Playtime();
         playtime.setup(
                 this.logger(),
-                this.config.toConfigurationValues()
+                this.config.toConfigurationValues(),
+                this.cloudServiceProvider
         );
 
         // Get database instance

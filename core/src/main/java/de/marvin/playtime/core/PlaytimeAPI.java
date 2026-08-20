@@ -17,24 +17,50 @@ public interface PlaytimeAPI {
     void cacheSession(@NotNull UUID uniqueId);
 
     /**
-     * Retrieves the cached {@link Session} of given {@link UUID}.
-     * If not cached, a default {@link Session} is returned.
+     * Attempts to retrieve the {@link Session} of the given player from the local cache, and if not present,
+     * returns {@link Session#defaultSession(UUID)}.
      *
      * @param uniqueId {@link UUID} of the player
-     * @return {@link Session} of given {@link UUID} or a default
-     * {@link Session} if not cached.
+     * @return {@link Session} of player with given {@link UUID} or {@link Session#defaultSession(UUID)} if not
+     * found
      */
     Session session(@NotNull UUID uniqueId);
 
     /**
-     * Forces retrieval of the {@link Session} of given {@link UUID}
-     * first from Redis, then from the database if not cached and
-     * only returns {@code null} if not found in both.
+     * Attempts to retrieve the {@link Session} of the given player from the local cache, and if not present,
+     * from the database. If not found in either, {@link Session#defaultSession(UUID)} is returned.
+     * <p>
+     * The order of retrieval is as follows:
+     * <ol>
+     *     <li>Check the local cache for the {@link Session}.</li>
+     *     <li>If not found, search the Redis cache for the {@link Session}.</li>
+     *     <li>If still not found, query the database for the {@link Session}.</li>
+     *     <li>If the {@link Session} is not found in any of the above, return
+     *     {@link Session#defaultSession(UUID)}.</li>
+     * </ol>
      *
      * @param uniqueId {@link UUID} of the player
-     * @return {@link CloudFuture} containing the player's {@link Session}.
+     * @return {@link CloudFuture} containing the player's {@link Session}, or
+     * {@link Session#defaultSession(UUID)} if not found
      */
-    CloudFuture<Session> forceSession(@NotNull UUID uniqueId);
+    CloudFuture<@NotNull Session> sessionOrDefault(@NotNull UUID uniqueId);
+
+    /**
+     * Attempts to retrieve the {@link Session} of the given player from the local cache, and if not present,
+     * from the database. If not found in either, {@code null} is returned.
+     * <p>
+     * The order of retrieval is as follows:
+     * <ol>
+     *     <li>Check the local cache for the {@link Session}.</li>
+     *     <li>If not found, search the Redis cache for the {@link Session}.</li>
+     *     <li>If still not found, query the database for the {@link Session}.</li>
+     *     <li>If the {@link Session} is not found in any of the above, return {@code null}.</li>
+     * </ol>
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @return {@link CloudFuture} containing the player's {@link Session}, or {@code null} if not found
+     */
+    CloudFuture<@Nullable Session> sessionOrNull(@NotNull UUID uniqueId);
 
     /**
      * Sets whether playtime should be currently counted for the

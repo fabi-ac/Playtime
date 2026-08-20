@@ -40,15 +40,12 @@ public class SQLConnection {
     }
 
     /**
-     * Fetches the {@link Session} of a player.
-     * <p>
-     * <b>Note:</b> If the player does not exist in the database, a new {@link Session} with default values
-     * is returned.
+     * Fetches the {@link Session} of the given player.
      *
      * @param uniqueId {@link UUID} of the player
-     * @return {@link CloudFuture} containing the player's {@link Session}.
+     * @return {@link CloudFuture} containing the {@link Session}, or {@code null} if not found
      */
-    public CloudFuture<Session> session(
+    public CloudFuture<@Nullable Session> session(
             @NotNull UUID uniqueId
     ) {
         return this.database.queryResult(
@@ -70,7 +67,7 @@ public class SQLConnection {
                         "Failed to fetch session data for player " + uniqueId + ": " + exception.getMessage()
                 );
             }
-            return Session.defaultSession(uniqueId);
+            return null;
         });
     }
 
@@ -84,13 +81,14 @@ public class SQLConnection {
      * @param uniqueId   {@link UUID} of the player
      * @param onlinetime Onlinetime to update in milliseconds, or {@code null} to keep the current value
      * @param playtime   Playtime to update in milliseconds, or {@code null} to keep the current value
+     * @return {@link CloudFuture} that completes when the operation is finished
      */
-    public void safeUpdate(
+    public @NotNull CloudFuture<Void> safeUpdate(
             @NotNull UUID uniqueId,
             @Nullable Long onlinetime,
             @Nullable Long playtime
     ) {
-        this.database.update(
+        return this.database.update(
                 "INSERT INTO " + this.table + " (unique_id, onlinetime, playtime) " +
                         "VALUES (?, COALESCE(?, 0), COALESCE(?, 0)) " +
                         "ON DUPLICATE KEY UPDATE " +
@@ -107,13 +105,14 @@ public class SQLConnection {
      * @param uniqueId   {@link UUID} of the player
      * @param onlinetime onlinetime to update in milliseconds, or {@code null} to keep the current value
      * @param playtime   playtime to update in milliseconds, or {@code null} to keep the current value
+     * @return {@link CloudFuture} that completes when the operation is finished
      */
-    public void update(
+    public CloudFuture<Void> update(
             @NotNull UUID uniqueId,
             @Nullable Long onlinetime,
             @Nullable Long playtime
     ) {
-        this.database.update(
+        return this.database.update(
                 "INSERT INTO " + this.table + " (unique_id, onlinetime, playtime) " +
                         "VALUES (?, COALESCE(?, 0), COALESCE(?, 0)) " +
                         "ON DUPLICATE KEY UPDATE " +
@@ -127,11 +126,12 @@ public class SQLConnection {
      * Deletes the session data of the player with the given {@link UUID} from the database.
      *
      * @param uniqueId {@link UUID} of the player
+     * @return {@link CloudFuture} that completes when the operation is finished
      */
-    public void delete(
+    public CloudFuture<Void> delete(
             @NotNull UUID uniqueId
     ) {
-        this.database.update(
+        return this.database.update(
                 "DELETE FROM " + this.table + " WHERE unique_id = ?;",
                 preparedStatement -> preparedStatement.setString(1, uniqueId.toString())
         );

@@ -347,8 +347,8 @@ public class Session {
     static @Nullable Session fromState(
             @Nullable SessionState state
     ) {
-        return state instanceof LoadedSession(Session session)
-                ? session
+        return state instanceof LoadedSession loadedSession
+                ? loadedSession.session()
                 : null;
     }
 

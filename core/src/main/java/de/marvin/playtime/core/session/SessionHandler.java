@@ -5,7 +5,7 @@ import de.marvin.api.dependencies.guava.collect.Maps;
 import de.marvin.playtime.core.PlaytimeAPI;
 import de.marvin.playtime.core.config.ConfigurationValues;
 import de.marvin.playtime.core.database.DatabaseHandler;
-import de.marvin.playtime.core.database.SessionLoadResult;
+import de.marvin.playtime.core.database.result.SessionClaimResult;
 import de.marvin.playtime.core.util.TaskScheduler;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -22,9 +22,24 @@ import java.util.logging.Logger;
  */
 public class SessionHandler implements PlaytimeAPI {
 
+    /**
+     * Holds the delay in milliseconds between ownership claim retries when a session is already owned by
+     * another service. Default value is {@code 100} milliseconds.
+     */
+    private static final long OWNERSHIP_CLAIM_RETRY_DELAY_MILLIS = 100L;
+
     private final DatabaseHandler databaseHandler;
     private final Logger logger;
 
+    /**
+     * Whether the {@link SessionHandler} is able to cache sessions locally.
+     */
+    private final boolean ableToCacheSessions;
+
+    /**
+     * Holds the threshold in milliseconds after which a player is considered away from keyboard. Default value
+     * is {@code 300000} milliseconds ({@code 5} minutes).
+     */
     private static long afkThreshold = 300000L;
 
     /**
@@ -33,29 +48,33 @@ public class SessionHandler implements PlaytimeAPI {
     private final ConcurrentMap<UUID, SessionState> sessions = Maps.newConcurrentMap();
 
     /**
+     * Whether the {@link SessionHandler} is shutting down. If set to {@code true}, no new session loads will be
+     * initiated.
+     */
+    private final AtomicBoolean shuttingDown = new AtomicBoolean();
+
+    /**
      * Scheduled task that updates sessions periodically.
      */
     private ScheduledFuture<?> sessionUpdater;
 
-    /**
-     * Indicates whether the session handler is shutting down. If set to {@code true}, no new session loads will
-     * be initiated.
-     */
-    private final AtomicBoolean shuttingDown = new AtomicBoolean();
     /**
      * Creates a session handler.
      *
      * @param databaseHandler     Database and Redis access
      * @param configurationValues Playtime configuration values
      * @param logger              Logger used for asynchronous load failures
+     * @param ableToCacheSessions Whether the session handler is able to cache sessions locally
      */
     public SessionHandler(
             @NotNull DatabaseHandler databaseHandler,
             @NotNull ConfigurationValues configurationValues,
-            @NotNull Logger logger
+            @NotNull Logger logger,
+            boolean ableToCacheSessions
     ) {
         this.databaseHandler = databaseHandler;
         this.logger = logger;
+        this.ableToCacheSessions = ableToCacheSessions;
 
         var configuredAfkThreshold = configurationValues.afkThreshold();
         if (configuredAfkThreshold != null)
@@ -71,9 +90,12 @@ public class SessionHandler implements PlaytimeAPI {
             @NotNull UUID uniqueId
     ) {
         if (this.shuttingDown.get()) return;
+        if (!this.ableToCacheSessions) throw new IllegalStateException(
+                "Sessions can only be cached by spigot services."
+        );
 
         var loadingSession = new LoadingSession(uniqueId);
-        this.sessions.put(uniqueId, loadingSession);
+        if (this.sessions.putIfAbsent(uniqueId, loadingSession) != null) return;
         if (this.shuttingDown.get()) {
             this.sessions.remove(uniqueId, loadingSession);
             return;
@@ -84,7 +106,7 @@ public class SessionHandler implements PlaytimeAPI {
     }
 
     /**
-     * Tries to load a player's {@link Session} first from Redis and, if not present, from SQL and completes the
+     * Attempts to load a player's {@link Session} first from Redis and, if not present, from SQL and completes the
      * load process by publishing it to the local cache if the {@link SessionState} is still current.
      *
      * @param uniqueId       {@link UUID} of the player
@@ -95,52 +117,98 @@ public class SessionHandler implements PlaytimeAPI {
             @NotNull LoadingSession loadingSession
     ) {
         try {
-            this.databaseHandler.session(uniqueId)
-                    .onSuccess(session -> this.completeSessionLoad(uniqueId, loadingSession, session))
-                    .onFailure(exception -> {
-                        if (this.sessions.remove(uniqueId, loadingSession))
-                            this.logLoadFailure(uniqueId, exception);
-                    });
-        } catch (RuntimeException exception) {
-            if (this.sessions.remove(uniqueId, loadingSession))
-                this.logLoadFailure(uniqueId, exception);
+            while (!this.shuttingDown.get()
+                    && this.sessions.get(uniqueId) == loadingSession
+                    && !Thread.currentThread().isInterrupted()) {
+                var claim = this.databaseHandler.loadAndClaim(
+                        uniqueId,
+                        loadingSession.claimUniqueId()
+                );
+                SessionClaimResult result;
+                try {
+                    result = claim.get();
+                } catch (InterruptedException exception) {
+                    result = claim.getUninterruptibly();
+                    if (result.claimed()) this.releaseDiscardedLoad(
+                            uniqueId,
+                            loadingSession,
+                            result.session()
+                    );
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (!result.claimed()) {
+                    Thread.sleep(OWNERSHIP_CLAIM_RETRY_DELAY_MILLIS);
+                    continue;
+                }
+
+                var session = result.session();
+                if (!this.completeSessionLoad(uniqueId, loadingSession, session))
+                    this.releaseDiscardedLoad(uniqueId, loadingSession, session);
+                return;
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        } catch (Exception exception) {
+            if (!this.sessions.remove(uniqueId, loadingSession)) return;
+            this.logLoadFailure(uniqueId, exception);
         }
     }
 
     /**
-     * Publishes a loaded session if its {@link SessionState} is still current.
+     * Publishes a {@link LoadedSession} based on the given {@link Session} if the {@link SessionState} of the
+     * respective {@link LoadedSession} is still current.
      *
      * @param uniqueId       {@link UUID} of the player
      * @param loadingSession {@link LoadingSession} that initiated the request
-     * @param result         {@link SessionLoadResult} returned by Redis or SQL
+     * @param session        {@link Session} returned by Redis or SQL
+     * @return {@code true} if the {@link Session} was published, otherwise {@code false}
      */
-    private void completeSessionLoad(
+    private boolean completeSessionLoad(
             @NotNull UUID uniqueId,
             @NotNull LoadingSession loadingSession,
-            @NotNull SessionLoadResult result
+            @NotNull Session session
     ) {
+        var completed = new AtomicBoolean();
         this.sessions.computeIfPresent(uniqueId, (ignored, currentState) -> {
             if (currentState != loadingSession) return currentState;
-            var resolvedSession = loadingSession.resolve(result.session());
-            var loadedSession = new LoadedSession(resolvedSession);
-            if (result.source() == SessionLoadResult.DataSource.REDIS) return loadedSession;
-            try {
-                this.databaseHandler.cache(resolvedSession);
-            } catch (RuntimeException exception) {
-                this.logger.warning(
-                        "Failed to cache session data for player " + uniqueId + ": " + exception.getMessage()
-                );
-            }
-            return loadedSession;
+            var resolvedSession = loadingSession.resolve(session);
+            completed.set(true);
+            return new LoadedSession(resolvedSession, loadingSession.claimUniqueId());
         });
+        return completed.get();
     }
 
     /**
-     * Retrieves the loaded {@link Session} of given {@link UUID} from {@link SessionHandler#sessions}. If not
-     * loaded, a {@link Session#defaultSession(UUID)} is returned.
+     * Releases a claimed {@link Session} that could no longer be published because the player disconnected or a
+     * newer {@link LoadingSession} replaced the original one.
+     *
+     * @param uniqueId       {@link UUID} of the player
+     * @param loadingSession {@link LoadingSession} that initiated the claim
+     * @param session        Claimed cached {@link Session} values
+     */
+    private void releaseDiscardedLoad(
+            @NotNull UUID uniqueId,
+            @NotNull LoadingSession loadingSession,
+            @NotNull Session session
+    ) {
+        var resolvedSession = loadingSession.resolve(session);
+        var snapshot = resolvedSession.finishTracking();
+        this.databaseHandler.release(
+                uniqueId,
+                loadingSession.claimUniqueId(),
+                snapshot.onlinetimeInMillis(),
+                snapshot.playtimeInMillis()
+        );
+    }
+
+    /**
+     * Attempts to retrieve the {@link Session} of the given player from the local cache, and if not present,
+     * returns {@link Session#defaultSession(UUID)}.
      *
      * @param uniqueId {@link UUID} of the player
-     * @return {@link Session} of given {@link UUID} or a default {@link Session} if not cached
+     * @return {@link Session} of player with given {@link UUID} or {@link Session#defaultSession(UUID)} if not
+     * found
      */
     public Session session(
             @NotNull UUID uniqueId
@@ -150,18 +218,56 @@ public class SessionHandler implements PlaytimeAPI {
     }
 
     /**
-     * Forces retrieval of the {@link Session} of given {@link UUID} first from Redis, then from the database
-     * if not cached and only returns {@code null} if not found in both.
+     * Attempts to retrieve the {@link Session} of the given player from the local cache, and if not present,
+     * from the database. If not found in either, {@link Session#defaultSession(UUID)} is returned.
+     * <p>
+     * The order of retrieval is as follows:
+     * <ol>
+     *     <li>Check the local cache for the {@link Session}.</li>
+     *     <li>If not found, search the Redis cache for the {@link Session}.</li>
+     *     <li>If still not found, query the database for the {@link Session}.</li>
+     *     <li>If the {@link Session} is not found in any of the above, return
+     *     {@link Session#defaultSession(UUID)}.</li>
+     * </ol>
      *
      * @param uniqueId {@link UUID} of the player
-     * @return {@link CloudFuture} containing the player's {@link Session}
+     * @return {@link CloudFuture} containing the player's {@link Session}, or
+     * {@link Session#defaultSession(UUID)} if not found
      */
-    public CloudFuture<Session> forceSession(
+    public CloudFuture<Session> sessionOrDefault(
             @NotNull UUID uniqueId
     ) {
-        var session = Session.fromState(this.sessions.get(uniqueId));
-        if (session != null) return new CloudFuture<>(session);
-        return this.databaseHandler.forceSession(uniqueId).map(SessionLoadResult::session);
+        var cachedSession = Session.fromState(this.sessions.get(uniqueId));
+        if (cachedSession != null) return new CloudFuture<>(cachedSession);
+
+        var databaseSession = this.databaseHandler.session(uniqueId);
+        return databaseSession != null
+                ? databaseSession
+                : new CloudFuture<>(Session.defaultSession(uniqueId));
+    }
+
+    /**
+     * Attempts to retrieve the {@link Session} of the given player from the local cache, and if not present,
+     * from the database. If not found in either, {@code null} is returned.
+     * <p>
+     * The order of retrieval is as follows:
+     * <ol>
+     *     <li>Check the local cache for the {@link Session}.</li>
+     *     <li>If not found, search the Redis cache for the {@link Session}.</li>
+     *     <li>If still not found, query the database for the {@link Session}.</li>
+     *     <li>If the {@link Session} is not found in any of the above, return {@code null}.</li>
+     * </ol>
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @return {@link CloudFuture} containing the player's {@link Session}, or {@code null} if not found
+     */
+    public CloudFuture<Session> sessionOrNull(
+            @NotNull UUID uniqueId
+    ) {
+        var cachedSession = Session.fromState(this.sessions.get(uniqueId));
+        if (cachedSession != null) return new CloudFuture<>(cachedSession);
+
+        return this.databaseHandler.session(uniqueId);
     }
 
     /**
@@ -176,8 +282,8 @@ public class SessionHandler implements PlaytimeAPI {
             boolean countPlaytime
     ) {
         this.sessions.computeIfPresent(uniqueId, (ignored, state) -> {
-            if (state instanceof LoadedSession(Session session)) {
-                session.setCountPlaytime(countPlaytime);
+            if (state instanceof LoadedSession loadedSession) {
+                loadedSession.session().setCountPlaytime(countPlaytime);
             } else if (state instanceof LoadingSession loadingSession) {
                 loadingSession.setCountPlaytime(countPlaytime);
             }
@@ -197,8 +303,8 @@ public class SessionHandler implements PlaytimeAPI {
             boolean away
     ) {
         this.sessions.computeIfPresent(uniqueId, (ignored, state) -> {
-            if (state instanceof LoadedSession(Session session)) {
-                session.setAwayFromKeyboard(away);
+            if (state instanceof LoadedSession loadedSession) {
+                loadedSession.session().setAwayFromKeyboard(away);
             } else if (state instanceof LoadingSession loadingSession) {
                 loadingSession.setAwayFromKeyboard(away);
             }
@@ -216,33 +322,13 @@ public class SessionHandler implements PlaytimeAPI {
             @NotNull UUID uniqueId
     ) {
         this.sessions.computeIfPresent(uniqueId, (ignored, state) -> {
-            if (state instanceof LoadedSession(Session session)) {
-                session.updateLastActivity();
+            if (state instanceof LoadedSession loadedSession) {
+                loadedSession.session().updateLastActivity();
             } else if (state instanceof LoadingSession loadingSession) {
                 loadingSession.updateLastActivity();
             }
             return state;
         });
-    }
-
-    /**
-     * Saves and uncaches the {@link Session} of given {@link UUID} from {@link SessionHandler#sessions} to
-     * the database if loaded.
-     *
-     * @param uniqueId {@link UUID} of the player
-     */
-    public void saveAndUncacheSession(
-            @NotNull UUID uniqueId
-    ) {
-        var session = Session.fromState(this.sessions.remove(uniqueId));
-        if (session == null) return;
-        var snapshot = session.finishTracking();
-        this.databaseHandler.update(
-                uniqueId,
-                snapshot.onlinetimeInMillis(),
-                snapshot.playtimeInMillis(),
-                false
-        );
     }
 
     /**
@@ -260,8 +346,8 @@ public class SessionHandler implements PlaytimeAPI {
             @Nullable Long playtimeInMillis
     ) {
         var state = this.sessions.computeIfPresent(uniqueId, (ignored, currentState) -> {
-            if (currentState instanceof LoadedSession(Session session)) {
-                session.update(
+            if (currentState instanceof LoadedSession loadedSession) {
+                loadedSession.session().update(
                         onlinetimeInMillis,
                         playtimeInMillis
                 );
@@ -294,8 +380,8 @@ public class SessionHandler implements PlaytimeAPI {
         var state = this.sessions.computeIfPresent(uniqueId, (ignored, currentState) -> {
             if (currentState instanceof LoadingSession loadingSession) {
                 loadingSession.reset();
-            } else if (currentState instanceof LoadedSession(Session session)) {
-                session.reset();
+            } else if (currentState instanceof LoadedSession loadedSession) {
+                loadedSession.session().reset();
             }
             return currentState;
         });
@@ -322,10 +408,31 @@ public class SessionHandler implements PlaytimeAPI {
     private void updateSessions() {
         this.sessions.forEach((uniqueId, ignored) ->
                 this.sessions.computeIfPresent(uniqueId, (key, state) -> {
-                    if (state instanceof LoadedSession(Session session))
-                        session.update();
+                    if (state instanceof LoadedSession loadedSession)
+                        loadedSession.session().update();
                     return state;
                 })
+        );
+    }
+
+    /**
+     * Saves and uncaches the {@link Session} of given {@link UUID} from {@link SessionHandler#sessions} to
+     * the database if loaded.
+     *
+     * @param uniqueId {@link UUID} of the player
+     */
+    public void saveAndUncacheSession(
+            @NotNull UUID uniqueId
+    ) {
+        var state = this.sessions.remove(uniqueId);
+        var session = Session.fromState(state);
+        if (session == null) return;
+        var snapshot = session.finishTracking();
+        this.databaseHandler.release(
+                uniqueId,
+                state.claimUniqueId(),
+                snapshot.onlinetimeInMillis(),
+                snapshot.playtimeInMillis()
         );
     }
 

@@ -12,6 +12,11 @@ import java.util.UUID;
 final class LoadingSession implements SessionState {
 
     /**
+     * {@link UUID} to distinguish this load attempt from other attempts on the same service.
+     */
+    private final UUID claimUniqueId = UUID.randomUUID();
+
+    /**
      * Represents the {@link Session} object that has not been fully loaded from the database yet.
      */
     private final Session pendingSession;
@@ -39,6 +44,16 @@ final class LoadingSession implements SessionState {
     ) {
         this.pendingSession = Session.defaultSession(uniqueId);
         this.pendingSession.startTracking();
+    }
+
+    /**
+     * Returns {@link UUID} of this load attempt.
+     *
+     * @return {@link UUID} of this load attempt
+     */
+    @Override
+    public @NotNull UUID claimUniqueId() {
+        return this.claimUniqueId;
     }
 
     /**

@@ -9,10 +9,12 @@ import de.marvin.playtime.server.command.PlaytimeCommand;
 import de.marvin.playtime.server.config.Config;
 import de.marvin.playtime.server.listener.PlayerActivityListener;
 import de.marvin.playtime.server.listener.PlayerConnectionListener;
+import eu.cloudnetservice.driver.provider.CloudServiceProvider;
 import eu.cloudnetservice.ext.platforminject.api.PlatformEntrypoint;
 import eu.cloudnetservice.ext.platforminject.api.stereotype.Command;
 import eu.cloudnetservice.ext.platforminject.api.stereotype.Dependency;
 import eu.cloudnetservice.ext.platforminject.api.stereotype.PlatformPlugin;
+import eu.cloudnetservice.wrapper.configuration.WrapperConfiguration;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.bukkit.command.CommandExecutor;
@@ -50,6 +52,9 @@ public class Server implements PlatformEntrypoint {
     private final JavaPlugin plugin;
     private final PluginManager pluginManager;
 
+    private final WrapperConfiguration wrapperConfiguration;
+    private final CloudServiceProvider cloudServiceProvider;
+
     private Config config;
 
     private PlaytimeAPI api;
@@ -62,10 +67,14 @@ public class Server implements PlatformEntrypoint {
     @Inject
     public Server(
             @NotNull JavaPlugin plugin,
-            @NotNull PluginManager pluginManager
+            @NotNull PluginManager pluginManager,
+            @NotNull WrapperConfiguration wrapperConfiguration,
+            @NotNull CloudServiceProvider cloudServiceProvider
     ) {
         this.plugin = plugin;
         this.pluginManager = pluginManager;
+        this.wrapperConfiguration = wrapperConfiguration;
+        this.cloudServiceProvider = cloudServiceProvider;
     }
 
     @Override
@@ -80,7 +89,9 @@ public class Server implements PlatformEntrypoint {
         var playtime = new Playtime();
         playtime.setup(
                 this.logger(),
-                this.config.toConfigurationValues()
+                this.config.toConfigurationValues(),
+                this.wrapperConfiguration,
+                this.cloudServiceProvider
         );
 
         // Get api and database instances
