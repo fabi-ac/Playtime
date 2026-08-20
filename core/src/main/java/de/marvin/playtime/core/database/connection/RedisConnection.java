@@ -41,6 +41,18 @@ public class RedisConnection {
     }
 
     /**
+     * Checks whether a {@link Session} of the given player currently exists in the Redis cache.
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @return {@code true} if a cached {@link Session} exists, {@code false} otherwise
+     */
+    public boolean exists(
+            @NotNull UUID uniqueId
+    ) {
+        return this.memory.get(this.sessionKey(uniqueId)) != null;
+    }
+
+    /**
      * Retrieves the cached {@link Session} of the given player.
      *
      * @param uniqueId {@link UUID} of the player

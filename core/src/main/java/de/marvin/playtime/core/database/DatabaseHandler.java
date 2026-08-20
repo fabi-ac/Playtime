@@ -238,47 +238,66 @@ public class DatabaseHandler {
     }
 
     /**
-     * Updates the {@link Session} of given player either in Redis if cached or in the database directly if no
-     * cached data was found.
+     * Updates the {@link Session} of the given player in the SQL database if no cached Redis session exists.
      *
      * @param uniqueId           {@link UUID} of the player
      * @param onlinetimeInMillis Onlinetime in milliseconds, or {@code null} to keep the current value
      * @param playtimeInMillis   Playtime in milliseconds, or {@code null} to keep the current value
      * @param force              Whether to overwrite database update restrictions
+     * @return {@code true} if the update was scheduled, {@code false} if the session is currently cached
      */
-    public void update(
+    public boolean update(
             @NotNull UUID uniqueId,
             @Nullable Long onlinetimeInMillis,
             @Nullable Long playtimeInMillis,
             boolean force
     ) {
-        if (this.redisConnection.update(uniqueId, onlinetimeInMillis, playtimeInMillis)) return;
+        // TODO: Forward manual session time updates to the current owning service and persist them correctly
+        //       via channel messaging if target is online and their session therefore cached in Redis
+        if (this.isCached(uniqueId)) return false;
         if (force) {
             this.sqlConnection.update(
                     uniqueId,
                     onlinetimeInMillis,
                     playtimeInMillis
             );
-            return;
+            return true;
         }
         this.sqlConnection.safeUpdate(
                 uniqueId,
                 onlinetimeInMillis,
                 playtimeInMillis
         );
+        return true;
     }
 
     /**
-     * Resets the {@link Session} of given player either in Redis if cached or in the database directly if no
-     * cached data was found.
+     * Resets the {@link Session} of the given player in the SQL database if no cached Redis session exists.
      *
      * @param uniqueId {@link UUID} of the player
+     * @return {@code true} if the reset was scheduled, {@code false} if the session is currently cached
      */
-    public void reset(
+    public boolean reset(
             @NotNull UUID uniqueId
     ) {
-        if (this.redisConnection.update(uniqueId, 0L, 0L)) return;
+        // TODO: Forward manual session time resets to the current owning service and persist them correctly
+        //       via channel messaging if target is online and their session therefore cached in Redis
+        if (this.isCached(uniqueId)) return false;
         this.sqlConnection.delete(uniqueId);
+        return true;
+    }
+
+    /**
+     * Checks whether the {@link Session} of the given player is currently cached in Redis.
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @return {@code true} if no {@link Session} is cached in Redis, {@code false} otherwise
+     * @see RedisConnection#exists(UUID)
+     */
+    private boolean isCached(
+            @NotNull UUID uniqueId
+    ) {
+        return this.redisConnection.exists(uniqueId);
     }
 
     /**

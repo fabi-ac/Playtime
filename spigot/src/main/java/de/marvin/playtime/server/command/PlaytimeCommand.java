@@ -267,11 +267,19 @@ public class PlaytimeCommand implements CommandExecutor {
     ) {
         try {
             var convertedTime = TimeConverter.convertTimeStringToLong(newTime);
-            this.playtimeAPI.update(
+            var updated = this.playtimeAPI.update(
                     cloudOfflinePlayer.uniqueId(),
                     timeType.equalsIgnoreCase("online") ? convertedTime : null,
                     timeType.equalsIgnoreCase("play") ? convertedTime : null
             );
+            if (!updated) {
+                var message = this.config.message(
+                        "player-modification-to-offline-players-only",
+                        Pair.of("player", cloudOfflinePlayer.name())
+                );
+                commandSender.sendMessage(message);
+                return;
+            }
         } catch (Exception exception) {
             var message = this.config.message(
                     "player-update-error",
@@ -300,7 +308,14 @@ public class PlaytimeCommand implements CommandExecutor {
             @NotNull CommandSender commandSender,
             @NotNull CloudOfflinePlayer cloudOfflinePlayer
     ) {
-        this.playtimeAPI.reset(cloudOfflinePlayer.uniqueId());
+        if (!this.playtimeAPI.reset(cloudOfflinePlayer.uniqueId())) {
+            var message = this.config.message(
+                    "player-modification-to-offline-players-only",
+                    Pair.of("player", cloudOfflinePlayer.name())
+            );
+            commandSender.sendMessage(message);
+            return;
+        }
         var message = this.config.message(
                 "player-reset-playtime",
                 Pair.of("player", cloudOfflinePlayer.name())

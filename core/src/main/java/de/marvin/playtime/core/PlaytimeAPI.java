@@ -99,26 +99,22 @@ public interface PlaytimeAPI {
     void saveAndUncacheSession(@NotNull UUID uniqueId);
 
     /**
-     * Updates the {@link Session} of given {@link UUID} in
-     * service's sessions if cached, otherwise tries to update cached
-     * Redis session and if not found there, updates it in the database
-     * directly.
+     * Updates the {@link Session} of given {@link UUID} if it is neither cached locally nor in Redis.
      *
      * @param uniqueId           {@link UUID} of the player
      * @param onlinetimeInMillis onlinetime in milliseconds
      * @param playtimeInMillis   playtime in milliseconds
+     * @return {@code true} if the {@link Session} was updated, {@code false} if it is currently cached
      */
-    void update(@NotNull UUID uniqueId, @Nullable Long onlinetimeInMillis, @Nullable Long playtimeInMillis);
+    boolean update(@NotNull UUID uniqueId, @Nullable Long onlinetimeInMillis, @Nullable Long playtimeInMillis);
 
     /**
-     * Resets the {@link Session} of given {@link UUID} in
-     * service's sessions if cached, otherwise tries to reset cached
-     * Redis session and if not found there, resets it in the database
-     * directly.
+     * Resets the {@link Session} of given {@link UUID} if it is neither cached locally nor in Redis.
      *
      * @param uniqueId {@link UUID} of the player
+     * @return {@code true} if the {@link Session} was reset, {@code false} if it is currently cached
      */
-    void reset(@NotNull UUID uniqueId);
+    boolean reset(@NotNull UUID uniqueId);
 
     /**
      * Starts the session updater task that updates all sessions

@@ -332,35 +332,20 @@ public class SessionHandler implements PlaytimeAPI {
     }
 
     /**
-     * Updates the {@link Session} of given {@link UUID} either in {@link SessionHandler#sessions} if loaded,
-     * otherwise tries to update cached Redis session and if not found there, update it in the database
-     * directly.
+     * Updates the {@link Session} of given {@link UUID} if it is neither cached locally nor in Redis.
      *
      * @param uniqueId           {@link UUID} of the player
      * @param onlinetimeInMillis onlinetime in milliseconds
      * @param playtimeInMillis   playtime in milliseconds
+     * @return {@code true} if the {@link Session} was updated, {@code false} if it is currently cached
      */
-    public void update(
+    public boolean update(
             @NotNull UUID uniqueId,
             @Nullable Long onlinetimeInMillis,
             @Nullable Long playtimeInMillis
     ) {
-        var state = this.sessions.computeIfPresent(uniqueId, (ignored, currentState) -> {
-            if (currentState instanceof LoadedSession loadedSession) {
-                loadedSession.session().update(
-                        onlinetimeInMillis,
-                        playtimeInMillis
-                );
-            } else if (currentState instanceof LoadingSession loadingSession) {
-                loadingSession.update(
-                        onlinetimeInMillis,
-                        playtimeInMillis
-                );
-            }
-            return currentState;
-        });
-        if (state != null) return;
-        this.databaseHandler.update(
+        if (this.sessions.containsKey(uniqueId)) return false;
+        return this.databaseHandler.update(
                 uniqueId,
                 onlinetimeInMillis,
                 playtimeInMillis,
@@ -369,24 +354,16 @@ public class SessionHandler implements PlaytimeAPI {
     }
 
     /**
-     * Resets the {@link Session} of given {@link UUID} in {@link SessionHandler#sessions} if loaded, otherwise
-     * tries to reset cached Redis session and if not found there, resets it in the database directly.
+     * Resets the {@link Session} of given {@link UUID} if it is neither cached locally nor in Redis.
      *
      * @param uniqueId {@link UUID} of the player
+     * @return {@code true} if the {@link Session} was reset, {@code false} if it is currently cached
      */
-    public void reset(
+    public boolean reset(
             @NotNull UUID uniqueId
     ) {
-        var state = this.sessions.computeIfPresent(uniqueId, (ignored, currentState) -> {
-            if (currentState instanceof LoadingSession loadingSession) {
-                loadingSession.reset();
-            } else if (currentState instanceof LoadedSession loadedSession) {
-                loadedSession.session().reset();
-            }
-            return currentState;
-        });
-        if (state != null) return;
-        this.databaseHandler.reset(uniqueId);
+        if (this.sessions.containsKey(uniqueId)) return false;
+        return this.databaseHandler.reset(uniqueId);
     }
 
     /**

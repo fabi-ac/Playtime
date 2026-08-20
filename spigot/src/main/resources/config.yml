@@ -19,3 +19,4 @@ messages:
   player-update-onlinetime: '§e<player>§7''s onlinetime has been updated to §e<new_time>§7.'
   player-update-error: '§cAn error occurred while converting new online-/playtime of §e<player>§c: §e<error>'
   player-reset-playtime: '§e<player>§7''s play- and onlinetime have been reset.'
+  player-modification-to-offline-players-only: '§cThe times of §e<player> §ccannot be modified while they are online. Please try again after they disconnect.'
