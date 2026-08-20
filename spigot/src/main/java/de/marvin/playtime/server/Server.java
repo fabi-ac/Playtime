@@ -131,16 +131,12 @@ public class Server implements PlatformEntrypoint {
      * Registers all commands.
      */
     private void registerCommands() {
-        this.registerCommand(
-                "playtime",
-                new PlaytimeCommand(
-                        api,
-                        this.plugin,
-                        this.config,
-                        this.userAPI
-                ),
-                null
-        );
+        this.registerCommand("playtime", new PlaytimeCommand(
+                api,
+                this.plugin,
+                this.config,
+                this.userAPI
+        ));
     }
 
     /**
@@ -158,17 +154,14 @@ public class Server implements PlatformEntrypoint {
     }
 
     /**
-     * Registers a {@link CommandExecutor} and optionally
-     * a {@link TabCompleter} to the given command.
+     * Registers a {@link CommandExecutor} and, if available, a {@link TabCompleter} to the {@link JavaPlugin}.
      *
-     * @param commandName          name of the command
-     * @param commandInstance      command executor instance
-     * @param tabCompleterInstance tab completer instance
+     * @param commandName     Name of the command
+     * @param commandInstance Command instance to register
      */
     private void registerCommand(
             @NotNull final String commandName,
-            @NotNull final CommandExecutor commandInstance,
-            @Nullable final TabCompleter tabCompleterInstance
+            @NotNull final CommandExecutor commandInstance
     ) {
         // In case a command somehow is not defined in plugin.yml
         var command = this.plugin.getCommand(commandName);
@@ -183,9 +176,9 @@ public class Server implements PlatformEntrypoint {
         // Set command executor
         command.setExecutor(commandInstance);
 
-        // Set tab completer if provided
-        if (tabCompleterInstance == null) return;
-        command.setTabCompleter(tabCompleterInstance);
+        // Set tab completer if available
+        if (!(commandInstance instanceof TabCompleter)) return;
+        command.setTabCompleter((TabCompleter) commandInstance);
     }
 
     /**
