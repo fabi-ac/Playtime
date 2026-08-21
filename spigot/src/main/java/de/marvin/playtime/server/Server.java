@@ -23,7 +23,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.logging.Logger;
 
@@ -110,9 +109,10 @@ public class Server implements PlatformEntrypoint {
 
     @Override
     public void onDisable() {
+        // Shutdown tasks, reset maps and variables and unregister listeners
+        this.playerActivityListener.shutdown();
         // Save all cached playtime data and shutdown api
         this.api.shutdown();
-        this.playerActivityListener.shutdown();
     }
 
     /**
@@ -123,7 +123,8 @@ public class Server implements PlatformEntrypoint {
 
         this.registerListener(this.playerActivityListener = new PlayerActivityListener(
                 this.plugin,
-                this.api
+                this.api,
+                this.config
         ));
     }
 

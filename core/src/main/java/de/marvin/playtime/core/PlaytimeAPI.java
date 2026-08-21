@@ -1,6 +1,7 @@
 package de.marvin.playtime.core;
 
 import de.marvin.api.core.utils.CloudFuture;
+import de.marvin.playtime.core.listener.AwayStatusChangeListener;
 import de.marvin.playtime.core.session.Session;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -115,6 +116,20 @@ public interface PlaytimeAPI {
      * @return {@code true} if the {@link Session} was reset, {@code false} if it is currently cached
      */
     boolean reset(@NotNull UUID uniqueId);
+
+    /**
+     * Registers a listener for player AFK status changes.
+     *
+     * @param listener {@link AwayStatusChangeListener} to register
+     */
+    void registerAwayStatusChangeListener(@NotNull AwayStatusChangeListener listener);
+
+    /**
+     * Unregisters a listener for player AFK status changes.
+     *
+     * @param listener {@link AwayStatusChangeListener} to unregister
+     */
+    void unregisterAwayStatusChangeListener(@NotNull AwayStatusChangeListener listener);
 
     /**
      * Starts the session updater task that updates all sessions

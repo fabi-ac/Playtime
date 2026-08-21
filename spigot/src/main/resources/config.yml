@@ -20,3 +20,5 @@ messages:
   player-update-error: '§cAn error occurred while converting new online-/playtime of §e<player>§c: §e<error>'
   player-reset-playtime: '§e<player>§7''s play- and onlinetime have been reset.'
   player-modification-to-offline-players-only: '§cThe times of §e<player> §ccannot be modified while they are online. Please try again after they disconnect.'
+  now-away-from-keyboard: '§aYou are now AFK.'
+  not-away-from-keyboard-anymore: '§aYou are no longer AFK.'

@@ -6,12 +6,14 @@ import de.marvin.playtime.core.PlaytimeAPI;
 import de.marvin.playtime.core.config.ConfigurationValues;
 import de.marvin.playtime.core.database.DatabaseHandler;
 import de.marvin.playtime.core.database.result.SessionClaimResult;
+import de.marvin.playtime.core.listener.AwayStatusChangeListener;
 import de.marvin.playtime.core.util.TaskScheduler;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,6 +50,12 @@ public class SessionHandler implements PlaytimeAPI {
     private final ConcurrentMap<UUID, SessionState> sessions = Maps.newConcurrentMap();
 
     /**
+     * {@link AwayStatusChangeListener AwayStatusChangeListeners} that receive player AFK status changes.
+     */
+    private final CopyOnWriteArrayList<AwayStatusChangeListener> awayStatusChangeListeners
+            = new CopyOnWriteArrayList<>();
+
+    /**
      * Whether the {@link SessionHandler} is shutting down. If set to {@code true}, no new session loads will be
      * initiated.
      */
@@ -77,8 +85,7 @@ public class SessionHandler implements PlaytimeAPI {
         this.ableToCacheSessions = ableToCacheSessions;
 
         var configuredAfkThreshold = configurationValues.afkThreshold();
-        if (configuredAfkThreshold != null)
-            SessionHandler.afkThreshold = configuredAfkThreshold;
+        if (configuredAfkThreshold != null) SessionHandler.afkThreshold = configuredAfkThreshold;
     }
 
     /**
@@ -94,7 +101,7 @@ public class SessionHandler implements PlaytimeAPI {
                 "Sessions can only be cached by spigot services."
         );
 
-        var loadingSession = new LoadingSession(uniqueId);
+        var loadingSession = new LoadingSession(uniqueId, this::notifyAwayStatusChange);
         if (this.sessions.putIfAbsent(uniqueId, loadingSession) != null) return;
         if (this.shuttingDown.get()) {
             this.sessions.remove(uniqueId, loadingSession);
@@ -414,11 +421,59 @@ public class SessionHandler implements PlaytimeAPI {
     }
 
     /**
+     * Registers a listener for player AFK status changes.
+     *
+     * @param listener {@link AwayStatusChangeListener} to register
+     */
+    @Override
+    public void registerAwayStatusChangeListener(
+            @NotNull AwayStatusChangeListener listener
+    ) {
+        this.awayStatusChangeListeners.addIfAbsent(listener);
+    }
+
+    /**
+     * Unregisters a listener for player AFK status changes.
+     *
+     * @param listener {@link AwayStatusChangeListener} to unregister
+     */
+    @Override
+    public void unregisterAwayStatusChangeListener(
+            @NotNull AwayStatusChangeListener listener
+    ) {
+        this.awayStatusChangeListeners.remove(listener);
+    }
+
+    /**
+     * Notifies all registered {@link AwayStatusChangeListener AwayStatusChangeListeners} of a player AFK
+     * status change.
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @param status   New AFK status
+     */
+    private void notifyAwayStatusChange(
+            @NotNull UUID uniqueId,
+            boolean status
+    ) {
+        for (var listener : this.awayStatusChangeListeners) {
+            try {
+                listener.handleAwayStatusChange(uniqueId, status);
+            } catch (RuntimeException exception) {
+                this.logger.warning(
+                        "Failed to notify AFK status listener for player " + uniqueId
+                                + ": " + exception.getMessage()
+                );
+            }
+        }
+    }
+
+    /**
      * Shuts down the session handler, saving and clearing all {@link SessionHandler#sessions}.
      */
     public void shutdown() {
         this.shuttingDown.set(true);
         if (this.sessionUpdater != null) this.sessionUpdater.cancel(false);
+        this.awayStatusChangeListeners.clear();
         TaskScheduler.shutdown();
         for (var uniqueId : this.sessions.keySet().toArray(UUID[]::new))
             this.saveAndUncacheSession(uniqueId);

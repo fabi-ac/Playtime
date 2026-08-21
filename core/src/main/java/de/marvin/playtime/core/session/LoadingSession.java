@@ -1,5 +1,6 @@
 package de.marvin.playtime.core.session;
 
+import de.marvin.playtime.core.listener.AwayStatusChangeListener;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -37,12 +38,15 @@ final class LoadingSession implements SessionState {
     /**
      * Creates a loading state and records when local time measurement should begin.
      *
-     * @param uniqueId {@link UUID} of the player
+     * @param uniqueId                 {@link UUID} of the player
+     * @param awayStatusChangeListener {@link AwayStatusChangeListener} that receives AFK status changes
      */
     LoadingSession(
-            @NotNull UUID uniqueId
+            @NotNull UUID uniqueId,
+            @NotNull AwayStatusChangeListener awayStatusChangeListener
     ) {
         this.pendingSession = Session.defaultSession(uniqueId);
+        this.pendingSession.setAwayStatusChangeListener(awayStatusChangeListener);
         this.pendingSession.startTracking();
     }
 

@@ -1,6 +1,9 @@
 package de.marvin.playtime.server.listener;
 
 import de.marvin.playtime.core.PlaytimeAPI;
+import de.marvin.playtime.core.listener.AwayStatusChangeListener;
+import de.marvin.playtime.server.config.Config;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -11,6 +14,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,17 +24,26 @@ public class PlayerActivityListener implements Listener {
 
     private final JavaPlugin plugin;
     private final PlaytimeAPI playtimeAPI;
+    private final Config config;
+
+    /**
+     * {@link AwayStatusChangeListener} that receives AFK status changes.
+     */
+    private final AwayStatusChangeListener awayStatusChangeListener = this::handleAwayStatusChange;
 
     private int movementCheckTaskId = -1;
     private final Map<UUID, Location> lastPlayerLocations = new HashMap<>();
 
     public PlayerActivityListener(
             JavaPlugin plugin,
-            PlaytimeAPI playtimeAPI
+            PlaytimeAPI playtimeAPI,
+            Config config
     ) {
         this.plugin = plugin;
         this.playtimeAPI = playtimeAPI;
+        this.config = config;
 
+        this.playtimeAPI.registerAwayStatusChangeListener(this.awayStatusChangeListener);
         this.checkMovement();
     }
 
@@ -63,17 +76,8 @@ public class PlayerActivityListener implements Listener {
     public void handleMovementQuit(
             PlayerQuitEvent event
     ) {
-        this.lastPlayerLocations.remove(event.getPlayer().getUniqueId());
-    }
-
-    /**
-     * Shuts down the movement check task and clears stored locations.
-     */
-    public void shutdown() {
-        if (this.movementCheckTaskId == -1) return;
-        this.plugin.getServer().getScheduler().cancelTask(this.movementCheckTaskId);
-        this.movementCheckTaskId = -1;
-        this.lastPlayerLocations.clear();
+        var uniqueId = event.getPlayer().getUniqueId();
+        this.lastPlayerLocations.remove(uniqueId);
     }
 
     // Interaction Check
@@ -129,6 +133,50 @@ public class PlayerActivityListener implements Listener {
             PlayerCommandPreprocessEvent event
     ) {
         this.playtimeAPI.updateLastActivity(event.getPlayer().getUniqueId());
+    }
+
+    // Away Status Changes
+
+    /**
+     * Informs a player after their AFK status changed. As status changes can originate from the asynchronous
+     * session updater, messages are dispatched on the server thread.
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @param status   New AFK status
+     */
+    private void handleAwayStatusChange(
+            @NotNull UUID uniqueId,
+            boolean status
+    ) {
+        var sendMessage = (Runnable) () -> {
+            var player = this.plugin.getServer().getPlayer(uniqueId);
+            if (player == null) return;
+
+            var messageKey = status
+                    ? "now-away-from-keyboard"
+                    : "not-away-from-keyboard-anymore";
+            player.sendMessage(this.config.message(messageKey));
+        };
+
+        if (Bukkit.isPrimaryThread()) {
+            sendMessage.run();
+            return;
+        }
+        this.plugin.getServer().getScheduler().runTask(this.plugin, sendMessage);
+    }
+
+    // Shutdown
+
+    /**
+     * Shuts down the movement check task, clears stored locations and removes the
+     * {@link AwayStatusChangeListener}.
+     */
+    public void shutdown() {
+        if (this.movementCheckTaskId != -1)
+            this.plugin.getServer().getScheduler().cancelTask(this.movementCheckTaskId);
+        this.movementCheckTaskId = -1;
+        this.lastPlayerLocations.clear();
+        this.playtimeAPI.unregisterAwayStatusChangeListener(this.awayStatusChangeListener);
     }
 
 }

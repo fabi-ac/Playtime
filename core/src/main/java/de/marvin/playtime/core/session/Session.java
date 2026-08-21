@@ -1,5 +1,6 @@
 package de.marvin.playtime.core.session;
 
+import de.marvin.playtime.core.listener.AwayStatusChangeListener;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -45,6 +46,12 @@ public class Session {
      * Whether the player currently is away from keyboard and no playtime should be counted.
      */
     private boolean awayFromKeyboard;
+
+    /**
+     * {@link AwayStatusChangeListener} that receives {@link #awayFromKeyboard} status changes for this
+     * {@link Session}.
+     */
+    private @Nullable AwayStatusChangeListener awayStatusChangeListener;
 
     /**
      * Whether time should currently be tracked in this {@link Session}.
@@ -156,8 +163,21 @@ public class Session {
     public synchronized void setAwayFromKeyboard(
             boolean awayFromKeyboard
     ) {
-        this.accumulateElapsedTime(System.nanoTime());
+        var previouslyAway = this.awayFromKeyboard;
+        this.accumulateElapsedTime(System.nanoTime(), false);
         this.awayFromKeyboard = awayFromKeyboard;
+        this.notifyAwayStatusChange(previouslyAway);
+    }
+
+    /**
+     * Sets the {@link AwayStatusChangeListener} for this {@link Session}.
+     *
+     * @param listener {@link AwayStatusChangeListener} to notify, or {@code null} to disable notifications
+     */
+    synchronized void setAwayStatusChangeListener(
+            @Nullable AwayStatusChangeListener listener
+    ) {
+        this.awayStatusChangeListener = listener;
     }
 
     /**
@@ -168,9 +188,11 @@ public class Session {
      */
     public synchronized void updateLastActivity() {
         var nowNanos = System.nanoTime();
-        this.accumulateElapsedTime(nowNanos);
+        var previouslyAway = this.awayFromKeyboard;
+        this.accumulateElapsedTime(nowNanos, false);
         this.lastActivityNanos = nowNanos;
-        if (this.awayFromKeyboard) this.awayFromKeyboard = false;
+        this.awayFromKeyboard = false;
+        this.notifyAwayStatusChange(previouslyAway);
     }
 
     /**
@@ -238,7 +260,7 @@ public class Session {
      * @return {@link Snapshot} of onlinetime and playtime in milliseconds
      */
     synchronized Snapshot finishTracking() {
-        this.accumulateElapsedTime(System.nanoTime());
+        this.accumulateElapsedTime(System.nanoTime(), false);
         this.trackingTime = false;
         return this.currentSnapshot();
     }
@@ -248,12 +270,14 @@ public class Session {
      */
     synchronized void reset() {
         var nowNanos = System.nanoTime();
-        this.accumulateElapsedTime(nowNanos);
+        var previouslyAway = this.awayFromKeyboard;
+        this.accumulateElapsedTime(nowNanos, false);
         this.onlinetimeInNanos = 0;
         this.playtimeInNanos = 0;
         this.countPlaytime = false;
         this.awayFromKeyboard = false;
         this.lastActivityNanos = nowNanos;
+        this.notifyAwayStatusChange(previouslyAway);
     }
 
     /**
@@ -266,6 +290,19 @@ public class Session {
      */
     private void accumulateElapsedTime(
             long nowNanos
+    ) {
+        this.accumulateElapsedTime(nowNanos, true);
+    }
+
+    /**
+     * Accumulates elapsed time and optionally reports an automatic AFK status change.
+     *
+     * @param nowNanos               Current timestamp in nanoseconds
+     * @param notifyAwayStatusChange Whether an AFK status change should be reported immediately
+     */
+    private void accumulateElapsedTime(
+            long nowNanos,
+            boolean notifyAwayStatusChange
     ) {
         if (!this.trackingTime) return;
 
@@ -286,7 +323,23 @@ public class Session {
                 this.playtimeInNanos,
                 Math.min(elapsedNanos, nanosUntilAfk)
         );
-        if (nowNanos - this.lastActivityNanos >= afkThresholdNanos) this.awayFromKeyboard = true;
+        if (nowNanos - this.lastActivityNanos < afkThresholdNanos) return;
+
+        var previouslyAway = this.awayFromKeyboard;
+        this.awayFromKeyboard = true;
+        if (notifyAwayStatusChange) this.notifyAwayStatusChange(previouslyAway);
+    }
+
+    /**
+     * Notifies the configured listener if the AFK status changed.
+     *
+     * @param previousStatus Previous AFK status
+     */
+    private void notifyAwayStatusChange(
+            boolean previousStatus
+    ) {
+        if (previousStatus == this.awayFromKeyboard || this.awayStatusChangeListener == null) return;
+        this.awayStatusChangeListener.handleAwayStatusChange(this.uniqueId, this.awayFromKeyboard);
     }
 
     /**
@@ -299,18 +352,6 @@ public class Session {
                 Session.toMillis(this.onlinetimeInNanos),
                 Session.toMillis(this.playtimeInNanos)
         );
-    }
-
-    /**
-     * Creates a default {@link Session} with {@code 0} onlinetime and {@code 0} playtime.
-     *
-     * @param uniqueId {@link UUID} of the player
-     * @return Default {@link Session}
-     */
-    public static @NotNull Session defaultSession(
-            @NotNull UUID uniqueId
-    ) {
-        return new Session(uniqueId, 0, 0);
     }
 
     /**
@@ -350,6 +391,18 @@ public class Session {
         return state instanceof LoadedSession loadedSession
                 ? loadedSession.session()
                 : null;
+    }
+
+    /**
+     * Creates a default {@link Session} with {@code 0} onlinetime and {@code 0} playtime.
+     *
+     * @param uniqueId {@link UUID} of the player
+     * @return Default {@link Session}
+     */
+    public static @NotNull Session defaultSession(
+            @NotNull UUID uniqueId
+    ) {
+        return new Session(uniqueId, 0, 0);
     }
 
     /**
