@@ -84,6 +84,13 @@ public interface PlaytimeAPI {
     void setAwayStatus(@NotNull UUID uniqueId, boolean away);
 
     /**
+     * Toggles whether the {@link Session} of the given {@link UUID} is away from keyboard.
+     *
+     * @param uniqueId {@link UUID} of the player
+     */
+    void toggleAwayStatus(@NotNull UUID uniqueId);
+
+    /**
      * Updates the last activity timestamp of the {@link Session}
      * of given {@link UUID}.
      *

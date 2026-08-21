@@ -19,6 +19,9 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
+/**
+ * Handles the main command for the playtime management system.
+ */
 public class PlaytimeCommand implements CommandExecutor, TabCompleter {
 
     /**

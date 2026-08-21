@@ -99,6 +99,13 @@ final class LoadingSession implements SessionState {
     }
 
     /**
+     * Toggles the player's retained AFK status while the session is loading.
+     */
+    void toggleAwayFromKeyboard() {
+        this.pendingSession.toggleAwayFromKeyboard();
+    }
+
+    /**
      * Retains player activity until the session load completes. Activity also clears a previously retained AFK
      * status, matching {@link Session#updateLastActivity()}.
      */

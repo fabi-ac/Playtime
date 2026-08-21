@@ -2,6 +2,7 @@ package de.marvin.playtime.server.listener;
 
 import de.marvin.playtime.core.PlaytimeAPI;
 import de.marvin.playtime.core.listener.AwayStatusChangeListener;
+import de.marvin.playtime.server.command.AFKCommand;
 import de.marvin.playtime.server.config.Config;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -17,6 +18,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -132,7 +134,40 @@ public class PlayerActivityListener implements Listener {
     public void handle(
             PlayerCommandPreprocessEvent event
     ) {
+        if (this.isAfkCommand(event.getMessage())) return;
         this.playtimeAPI.updateLastActivity(event.getPlayer().getUniqueId());
+    }
+
+    /**
+     * Whether the given message is the plugins AFK command.
+     *
+     * @param message Message to check
+     * @return {@code true} if the message is the AFK command, {@code false} otherwise
+     */
+    private boolean isAfkCommand(
+            @NotNull String message
+    ) {
+        if (message.isBlank()) return false;
+
+        var separatorIndex = message.indexOf(' ');
+        var commandName = separatorIndex == -1
+                ? message
+                : message.substring(0, separatorIndex);
+
+        if (commandName.startsWith("/")) commandName = commandName.substring(1);
+        if (commandName.isBlank()) return false;
+
+        var components = commandName.split(":", 2);
+
+        // If "/afk" is used
+        if (components.length == 1) return commandName.equalsIgnoreCase(AFKCommand.NAME);
+
+        var namespace = components[0];
+        var pluginName = this.plugin.getName().toLowerCase(Locale.ROOT);
+        var command = components[1];
+
+        // If "/playtimeapi:afk" is used
+        return namespace.equalsIgnoreCase(pluginName) && command.equalsIgnoreCase(AFKCommand.NAME);
     }
 
     // Away Status Changes

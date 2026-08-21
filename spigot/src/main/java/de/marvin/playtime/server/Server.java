@@ -5,6 +5,7 @@ import de.marvin.api.core.api.UserAPI;
 import de.marvin.playtime.core.Playtime;
 import de.marvin.playtime.core.PlaytimeAPI;
 import de.marvin.playtime.core.database.DatabaseHandler;
+import de.marvin.playtime.server.command.AFKCommand;
 import de.marvin.playtime.server.command.PlaytimeCommand;
 import de.marvin.playtime.server.config.Config;
 import de.marvin.playtime.server.listener.PlayerActivityListener;
@@ -43,6 +44,10 @@ import java.util.logging.Logger;
                         name = "playtime",
                         description = "Lookup current online- and playtime.",
                         aliases = {"onlinetime", "pt", "ot"}
+                ),
+                @Command(
+                        name = "afk",
+                        description = "Toggle your current AFK status."
                 )
         }
 )
@@ -132,6 +137,7 @@ public class Server implements PlatformEntrypoint {
      * Registers all commands.
      */
     private void registerCommands() {
+        this.registerCommand(AFKCommand.NAME, new AFKCommand(this.api, this.config));
         this.registerCommand("playtime", new PlaytimeCommand(
                 api,
                 this.plugin,

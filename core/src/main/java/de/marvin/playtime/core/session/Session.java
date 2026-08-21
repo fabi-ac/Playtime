@@ -170,6 +170,19 @@ public class Session {
     }
 
     /**
+     * Toggles whether the player is away from keyboard.
+     */
+    public synchronized void toggleAwayFromKeyboard() {
+        // When toggling AFK status off, update last activity to prevent immediate reactivation of AFK status
+        // due to the automatic threshold
+        if (this.awayFromKeyboard) {
+            this.updateLastActivity();
+            return;
+        }
+        this.setAwayFromKeyboard(true);
+    }
+
+    /**
      * Sets the {@link AwayStatusChangeListener} for this {@link Session}.
      *
      * @param listener {@link AwayStatusChangeListener} to notify, or {@code null} to disable notifications

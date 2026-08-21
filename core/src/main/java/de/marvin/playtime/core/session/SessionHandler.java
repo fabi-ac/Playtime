@@ -320,6 +320,25 @@ public class SessionHandler implements PlaytimeAPI {
     }
 
     /**
+     * Toggles whether the {@link Session} of the given {@link UUID} in {@link SessionHandler#sessions} is away
+     * from keyboard.
+     *
+     * @param uniqueId {@link UUID} of the player
+     */
+    public void toggleAwayStatus(
+            @NotNull UUID uniqueId
+    ) {
+        this.sessions.computeIfPresent(uniqueId, (ignored, state) -> {
+            if (state instanceof LoadedSession loadedSession) {
+                loadedSession.session().toggleAwayFromKeyboard();
+            } else if (state instanceof LoadingSession loadingSession) {
+                loadingSession.toggleAwayFromKeyboard();
+            }
+            return state;
+        });
+    }
+
+    /**
      * Updates the last activity timestamp of the {@link Session} of given {@link UUID} in
      * {@link SessionHandler#sessions}.
      *

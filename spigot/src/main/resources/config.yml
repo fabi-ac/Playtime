@@ -10,6 +10,7 @@ afk-threshold: 300
 
 # Messages
 messages:
+  players-only-command: '§cThis command is for players only.'
   player-not-found: '§cPlayer was not found.'
   own-current-playtime: '§7Your current playtime is §e<playtime> §7and you have been online for a total of §e<onlinetime>§7.'
   no-permission: '§cI''m sorry, but you do not have permission to perform this command. Please contact the server administrators if you believe that this is in error.'
