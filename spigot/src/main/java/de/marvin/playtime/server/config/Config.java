@@ -55,6 +55,15 @@ public class Config extends ConfigHandler {
     }
 
     /**
+     * Gets the interval in ticks at which player movement is checked to update their last activity.
+     *
+     * @return Interval for movement checks in ticks.
+     */
+    public long movementCheckInterval() {
+        return this.getLong("movement-check-interval", 40);
+    }
+
+    /**
      * Gets a message from the config and replaces placeholders with provided arguments.
      *
      * @param message      message key to retrieve

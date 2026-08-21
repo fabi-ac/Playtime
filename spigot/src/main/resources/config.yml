@@ -8,6 +8,10 @@ redis-prefix: playtime
 # when no activity is detected.
 afk-threshold: 300
 
+# Interval in ticks at which the plugin checks for player movement
+# to update their last activity.
+movement-check-interval: 40
+
 # Messages
 messages:
   players-only-command: '§cThis command is for players only.'

@@ -33,8 +33,9 @@ public class PlayerActivityListener implements Listener {
      */
     private final AwayStatusChangeListener awayStatusChangeListener = this::handleAwayStatusChange;
 
-    private int movementCheckTaskId = -1;
     private final Map<UUID, Location> lastPlayerLocations = new HashMap<>();
+    private final long movementCheckInterval;
+    private int movementCheckTaskId = -1;
 
     public PlayerActivityListener(
             JavaPlugin plugin,
@@ -46,6 +47,8 @@ public class PlayerActivityListener implements Listener {
         this.config = config;
 
         this.playtimeAPI.registerAwayStatusChangeListener(this.awayStatusChangeListener);
+
+        this.movementCheckInterval = this.config.movementCheckInterval();
         this.checkMovement();
     }
 
@@ -65,7 +68,7 @@ public class PlayerActivityListener implements Listener {
                             this.lastPlayerLocations.put(uniqueId, currentLocation);
                             if (lastLocation == null || currentLocation.equals(lastLocation)) return;
                             this.playtimeAPI.updateLastActivity(uniqueId);
-                        }), 0L, 40L
+                        }), 0L, this.movementCheckInterval
                 ).getTaskId();
     }
 
