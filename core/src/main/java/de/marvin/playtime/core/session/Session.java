@@ -163,10 +163,10 @@ public class Session {
     public synchronized void setAwayFromKeyboard(
             boolean awayFromKeyboard
     ) {
-        var previouslyAway = this.awayFromKeyboard;
+        var previousStatus = this.awayFromKeyboard;
         this.accumulateElapsedTime(System.nanoTime(), false);
-        this.awayFromKeyboard = awayFromKeyboard;
-        this.notifyAwayStatusChange(previouslyAway);
+        this.changeAwayFromKeyboard(awayFromKeyboard);
+        if (previousStatus != this.awayFromKeyboard) this.notifyAwayStatusChange();
     }
 
     /**
@@ -188,11 +188,11 @@ public class Session {
      */
     public synchronized void updateLastActivity() {
         var nowNanos = System.nanoTime();
-        var previouslyAway = this.awayFromKeyboard;
+        var previousStatus = this.awayFromKeyboard;
         this.accumulateElapsedTime(nowNanos, false);
         this.lastActivityNanos = nowNanos;
-        this.awayFromKeyboard = false;
-        this.notifyAwayStatusChange(previouslyAway);
+        this.changeAwayFromKeyboard(false);
+        if (previousStatus != this.awayFromKeyboard) this.notifyAwayStatusChange();
     }
 
     /**
@@ -270,14 +270,14 @@ public class Session {
      */
     synchronized void reset() {
         var nowNanos = System.nanoTime();
-        var previouslyAway = this.awayFromKeyboard;
+        var previousStatus = this.awayFromKeyboard;
         this.accumulateElapsedTime(nowNanos, false);
         this.onlinetimeInNanos = 0;
         this.playtimeInNanos = 0;
         this.countPlaytime = false;
-        this.awayFromKeyboard = false;
+        this.changeAwayFromKeyboard(false);
         this.lastActivityNanos = nowNanos;
-        this.notifyAwayStatusChange(previouslyAway);
+        if (previousStatus != this.awayFromKeyboard) this.notifyAwayStatusChange();
     }
 
     /**
@@ -306,39 +306,47 @@ public class Session {
     ) {
         if (!this.trackingTime) return;
 
-        // Onlinetime
+        // Always count onlinetime
         var intervalStartNanos = this.lastUpdateNanos;
         var elapsedNanos = nowNanos - intervalStartNanos;
         if (elapsedNanos <= 0) return;
         this.lastUpdateNanos = nowNanos;
         this.onlinetimeInNanos = Math.addExact(this.onlinetimeInNanos, elapsedNanos);
 
-        // If playtime is not counted or player is away from keyboard, skip playtime accumulation
-        if (!this.countPlaytime || this.awayFromKeyboard) return;
-
-        // Playtime
+        // Accumulate playtime only while enabled and before the player becomes AFK
         var afkThresholdNanos = TimeUnit.MILLISECONDS.toNanos(SessionHandler.afkThreshold());
-        var nanosUntilAfk = afkThresholdNanos - (intervalStartNanos - this.lastActivityNanos);
-        if (nanosUntilAfk > 0) this.playtimeInNanos = Math.addExact(
-                this.playtimeInNanos,
-                Math.min(elapsedNanos, nanosUntilAfk)
-        );
-        if (nowNanos - this.lastActivityNanos < afkThresholdNanos) return;
+        if (this.countPlaytime && !this.awayFromKeyboard) {
+            var nanosUntilAfk = afkThresholdNanos - (intervalStartNanos - this.lastActivityNanos);
+            if (nanosUntilAfk > 0) this.playtimeInNanos = Math.addExact(
+                    this.playtimeInNanos,
+                    Math.min(elapsedNanos, nanosUntilAfk)
+            );
+        }
 
-        var previouslyAway = this.awayFromKeyboard;
-        this.awayFromKeyboard = true;
-        if (notifyAwayStatusChange) this.notifyAwayStatusChange(previouslyAway);
+        // Mark the player as AFK if the threshold was crossed
+        if (nowNanos - this.lastActivityNanos < afkThresholdNanos) return;
+        if (this.changeAwayFromKeyboard(true) && notifyAwayStatusChange) this.notifyAwayStatusChange();
     }
 
     /**
-     * Notifies the configured listener if the AFK status changed.
+     * Changes the player's AFK status and returns whether this change was effective.
      *
-     * @param previousStatus Previous AFK status
+     * @param status New AFK status
+     * @return {@code true} if the status change was effective, {@code false} otherwise
      */
-    private void notifyAwayStatusChange(
-            boolean previousStatus
+    private boolean changeAwayFromKeyboard(
+            boolean status
     ) {
-        if (previousStatus == this.awayFromKeyboard || this.awayStatusChangeListener == null) return;
+        if (this.awayFromKeyboard == status) return false;
+        this.awayFromKeyboard = status;
+        return true;
+    }
+
+    /**
+     * Notifies the configured {@link AwayStatusChangeListener} about the current AFK status.
+     */
+    private void notifyAwayStatusChange() {
+        if (this.awayStatusChangeListener == null) return;
         this.awayStatusChangeListener.handleAwayStatusChange(this.uniqueId, this.awayFromKeyboard);
     }
 
